@@ -1,0 +1,28 @@
+.{
+    .name = "galaxy-one-hackathon", // TODO: change this after we come up with a name
+
+    .version = "0.0.0",
+
+    .dependencies = .{
+        .glfw = .{
+            .url = "git+https://github.com/slimsag/glfw#e6f377baed70a7bef9fa08d808f40b64c5136bf6",
+            .hash = "1220c15e66c13f9633fcfd50b5ed265f74f2950c98b1f1defd66298fa027765e0190",
+        },
+        .zgl = .{
+            .url = "git+https://github.com/ziglibs/zgl#e483862224a536d9ab409cd127a418f198b52ab3",
+            .hash = "122059f1b282209c57cc374baff46ab0498c422c271ec6960d18f8f769195f993df5",
+        },
+        .zlm = .{
+            .url = "git+https://github.com/ziglibs/zlm#35b76fae19f9d0a1ed541db621d7c4b3e266087e",
+            .hash = "1220342ac333965de915f74a8425e4848ffe46852da0e4789103f9ec650c3cd22456",
+        },
+    },
+
+    .paths = .{
+        "build.zig",
+        "build.zig.zon",
+        "LICENSE",
+        "README.md",
+        "src",
+    },
+}
