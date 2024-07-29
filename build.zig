@@ -13,7 +13,6 @@ pub fn build(b: *std.Build) void {
     b.installArtifact(exe);
 
     exe.addCSourceFiles(.{ .files = &[_][]const u8{
-        "src/stb/stb_truetype_impl.c",
         "src/stb/stb_image_impl.c",
     } });
     exe.addIncludePath(b.path("src/stb"));
