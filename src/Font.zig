@@ -5,7 +5,7 @@ const zlm = @import("zlm");
 
 const c = @import("c.zig");
 
-const Self = @This();
+const Font = @This();
 
 const UvRect = struct {
     position: zlm.Vec2,
@@ -77,7 +77,7 @@ line_height: f32,
 baseline: f32,
 glyphs: GlyphMap,
 
-pub fn init(allocator: Allocator, comptime name: []const u8) !Self {
+pub fn init(allocator: Allocator, comptime name: []const u8) !Font {
     // ASSUME: only one page
     const info_data = @embedFile("assets/fonts/" ++ name ++ "/info.json");
     const atlas_data = @embedFile("assets/fonts/" ++ name ++ "/atlas.png");
@@ -139,7 +139,7 @@ pub fn init(allocator: Allocator, comptime name: []const u8) !Self {
     };
 }
 
-pub fn deinit(self: *Self) void {
+pub fn deinit(self: *Font) void {
     gl.deleteTexture(self.atlas_texture);
     self.glyphs.deinit();
 }

@@ -4,7 +4,7 @@ const Allocator = std.mem.Allocator;
 const gl = @import("zgl");
 const zlm = @import("zlm");
 
-const Self = @This();
+const ParticleRenderer = @This();
 
 const Vertex = extern struct {
     position: zlm.Vec3,
@@ -91,7 +91,7 @@ vertex_buffer: gl.Buffer,
 index_buffer: gl.Buffer,
 uniform_buffer: gl.Buffer,
 
-pub fn init(allocator: Allocator, view_proj_matrix: zlm.Mat4) !Self {
+pub fn init(allocator: Allocator, view_proj_matrix: zlm.Mat4) !ParticleRenderer {
     const program = create_program: {
         const vertex_shader_source = @embedFile(vertex_shader_path);
         const fragment_shader_source = @embedFile(fragment_shader_path);
@@ -210,7 +210,7 @@ pub fn init(allocator: Allocator, view_proj_matrix: zlm.Mat4) !Self {
     };
 }
 
-pub fn deinit(self: *Self) void {
+pub fn deinit(self: *ParticleRenderer) void {
     self.allocator.destroy(self.uniform_data);
     gl.deleteBuffer(self.uniform_buffer);
     gl.deleteBuffer(self.vertex_buffer);
@@ -219,7 +219,7 @@ pub fn deinit(self: *Self) void {
     gl.deleteProgram(self.program);
 }
 
-pub fn render(self: *Self, model_matrix: zlm.Mat4, color: zlm.Vec4) void {
+pub fn render(self: *ParticleRenderer, model_matrix: zlm.Mat4, color: zlm.Vec4) void {
     if (self.instance_count >= max_cubes) {
         self.flush();
     }
@@ -229,7 +229,7 @@ pub fn render(self: *Self, model_matrix: zlm.Mat4, color: zlm.Vec4) void {
     self.instance_count += 1;
 }
 
-pub fn flush(self: *Self) void {
+pub fn flush(self: *ParticleRenderer) void {
     if (self.instance_count == 0) {
         return;
     }

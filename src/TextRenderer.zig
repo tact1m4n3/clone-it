@@ -6,7 +6,7 @@ const zlm = @import("zlm");
 
 const Font = @import("Font.zig");
 
-const Self = @This();
+const TextRenderer = @This();
 
 pub const Anchor = enum {
     top_left,
@@ -52,7 +52,7 @@ vertex_array: gl.VertexArray,
 vertex_buffer: gl.Buffer,
 index_buffer: gl.Buffer,
 
-pub fn init(allocator: Allocator, font: *Font, view_proj_matrix: zlm.Mat4) !Self {
+pub fn init(allocator: Allocator, font: *Font, view_proj_matrix: zlm.Mat4) !TextRenderer {
     const program = create_program: {
         const vertex_shader_source = @embedFile(vertex_shader_path);
         const fragment_shader_source = @embedFile(fragment_shader_path);
@@ -192,7 +192,7 @@ pub fn init(allocator: Allocator, font: *Font, view_proj_matrix: zlm.Mat4) !Self
     };
 }
 
-pub fn deinit(self: *Self) void {
+pub fn deinit(self: *TextRenderer) void {
     self.allocator.free(self.vertices);
     gl.deleteBuffer(self.vertex_buffer);
     gl.deleteBuffer(self.index_buffer);
@@ -200,7 +200,7 @@ pub fn deinit(self: *Self) void {
     gl.deleteProgram(self.program);
 }
 
-pub fn render(self: *Self, text: []const u8, model_matrix: zlm.Mat4, color: zlm.Vec4) void {
+pub fn render(self: *TextRenderer, text: []const u8, model_matrix: zlm.Mat4, color: zlm.Vec4) void {
     var text_width: f32 = 0;
     var current_width: f32 = 0;
     var text_height: f32 = self.font.line_height;
@@ -251,7 +251,7 @@ pub fn render(self: *Self, text: []const u8, model_matrix: zlm.Mat4, color: zlm.
     }
 }
 
-pub fn flush(self: *Self) void {
+pub fn flush(self: *TextRenderer) void {
     if (self.index_count == 0) {
         return;
     }

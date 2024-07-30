@@ -4,7 +4,7 @@ const gl = @import("zgl");
 const zlm = @import("zlm");
 
 const Window = @import("Window.zig");
-const events = @import("events.zig");
+const Events = @import("Events.zig");
 const Font = @import("Font.zig");
 const TextRenderer = @import("TextRenderer.zig");
 const Player = @import("Player.zig");
@@ -21,7 +21,7 @@ pub fn main() !void {
     });
     defer window.deinit();
 
-    events.init(window);
+    const events = Events.init(window);
 
     // idk if we should leave these here
     {
@@ -47,8 +47,9 @@ pub fn main() !void {
     }
 
     const aspect = 1280.0 / 720.0;
-    var proj_matrix = zlm.Mat4.createPerspective(zlm.toRadians(45.0), aspect, 0.1, 1000);
-    const view_matrix = zlm.Mat4.createLookAt(zlm.vec3(-3, 4, -8), zlm.Vec3.zero, zlm.vec3(0, 1, 0));
+    // var proj_matrix = zlm.Mat4.createPerspective(zlm.toRadians(45.0), aspect, 0.1, 1000);
+    var proj_matrix = zlm.Mat4.createOrthogonal(3 * -aspect, 3 * aspect, -3, 3, -1000, 1000);
+    const view_matrix = zlm.Mat4.createLookAt(zlm.vec3(8, 4, 8), zlm.vec3(0, 1, 0), zlm.vec3(0, 1, 0));
     var view_proj_matrix = view_matrix.mul(proj_matrix);
 
     var font = try Font.init(allocator, "anonymous_pro");
@@ -74,7 +75,15 @@ pub fn main() !void {
                 proj_matrix = zlm.Mat4.createOrthogonal(-new_aspect, new_aspect, -1, 1, -1000, 1000);
                 view_proj_matrix = view_matrix.mul(proj_matrix);
                 renderer.view_proj_matrix = view_proj_matrix;
-                player.view_proj_matrix = view_proj_matrix;
+                player.renderer.view_proj_matrix = view_proj_matrix;
+            }
+
+            if (events.mouse_button_just_pressed(.left)) {
+                std.debug.print("pressed\n", .{});
+            }
+
+            if (events.mouse_button_just_released(.left)) {
+                std.debug.print("released\n", .{});
             }
 
             player.update(dt);
@@ -88,7 +97,7 @@ pub fn main() !void {
             // renderer.render("Hello", zlm.Mat4.identity, zlm.Vec4.one);
             // renderer.flush();
 
-            player.render();
+            player.renderer.render();
         }
 
         window.swapBuffers();

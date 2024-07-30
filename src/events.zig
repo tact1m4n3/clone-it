@@ -3,55 +3,43 @@ const std = @import("std");
 const c = @import("c.zig");
 const Window = @import("Window.zig");
 
-const Registry = struct {
-    window: ?*c.struct_GLFWwindow = null,
-    resize: ?[2]u32 = null,
-    keys: [10]bool = [_]bool{false} ** 10,
-    mouse_buttons: [2]bool = [_]bool{false} ** 2,
-};
+const Events = @This();
 
-var registry: Registry = .{};
+var instance: ?Events = null;
 
-pub fn init(window: Window) void {
-    registry.window = window.inner;
+window: ?*c.struct_GLFWwindow = null,
+resize: ?[2]u32 = null,
+mouse_button_pressed_state: [2]bool = [_]bool{false} ** 2,
+mouse_button_released_state: [2]bool = [_]bool{false} ** 2,
 
+pub fn init(window: Window) *Events {
     _ = c.glfwSetFramebufferSizeCallback(window.inner, framebufferSizeCallback);
+    _ = c.glfwSetMouseButtonCallback(window.inner, mouseButtonCallback);
+
+    instance = .{
+        .window = window.inner,
+        .resize = null,
+        .mouse_button_pressed_state = [_]bool{false} ** 2,
+        .mouse_button_released_state = [_]bool{false} ** 2,
+    };
+    return &instance.?;
 }
 
-pub fn reset() void {
-    registry.resize = null;
+pub fn reset(self: *Events) void {
+    self.resize = null;
+    self.mouse_button_pressed_state = [_]bool{false} ** 2;
+    self.mouse_button_released_state = [_]bool{false} ** 2;
 }
 
-pub fn resized() ?[2]u32 {
-    return registry.resize;
+pub fn resized(self: *Events) ?[2]u32 {
+    return self.resize;
 }
 
-pub fn cursor_pos() ?[2]f32 {
+pub fn cursor_pos(self: *Events) ?[2]f32 {
     var x: f64 = undefined;
     var y: f64 = undefined;
-    c.glfwGetCursorPos(registry.window, &x, &y);
+    c.glfwGetCursorPos(self.window, &x, &y);
     return .{ @floatCast(x), @floatCast(y) };
-}
-
-pub const Key = enum(u32) {
-    key0 = 48,
-    key1 = 49,
-    key2 = 50,
-    key3 = 51,
-    key4 = 52,
-    key5 = 53,
-    key6 = 54,
-    key7 = 55,
-    key8 = 56,
-    key9 = 57,
-};
-
-pub fn key_pressed(key: Key) bool {
-    return c.glfwGetKey(registry.window, @intFromEnum(key)) == c.GLFW_PRESS;
-}
-
-pub fn key_just_pressed(key: Key) bool {
-    return registry.keys[@intFromEnum(key) - @intFromEnum(.key0)];
 }
 
 pub const MouseButton = enum(u32) {
@@ -59,10 +47,29 @@ pub const MouseButton = enum(u32) {
     right = 1,
 };
 
-pub fn mouse_button_pressed(button: MouseButton) bool {
-    return c.glfwGetMouseButton(registry.window, @intFromEnum(button)) == c.GLFW_PRESS;
+pub fn mouse_button_pressed(self: *Events, button: MouseButton) bool {
+    return c.glfwGetMouseButton(self.window, @intCast(@intFromEnum(button))) == c.GLFW_PRESS;
+}
+
+pub fn mouse_button_just_pressed(self: *Events, button: MouseButton) bool {
+    return self.mouse_button_pressed_state[@intFromEnum(button)];
+}
+
+pub fn mouse_button_just_released(self: *Events, button: MouseButton) bool {
+    return self.mouse_button_pressed_state[@intFromEnum(button)];
 }
 
 fn framebufferSizeCallback(_: ?*c.struct_GLFWwindow, width: c_int, height: c_int) callconv(.C) void {
-    registry.resize = [_]u32{ @intCast(width), @intCast(height) };
+    if (instance) |*self| {
+        self.resize = [_]u32{ @intCast(width), @intCast(height) };
+    }
+}
+
+fn mouseButtonCallback(_: ?*c.struct_GLFWwindow, button: c_int, action: c_int, _: c_int) callconv(.C) void {
+    if (instance) |*self| {
+        if (button >= 0 and button < 2) {
+            self.mouse_button_pressed_state[@intCast(button)] = action == c.GLFW_PRESS;
+            self.mouse_button_released_state[@intCast(button)] = action == c.GLFW_RELEASE;
+        }
+    }
 }
