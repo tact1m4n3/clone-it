@@ -6,7 +6,9 @@ const zlm = @import("zlm");
 const Window = @import("Window.zig");
 const Events = @import("Events.zig");
 const Font = @import("Font.zig");
+const Transform = @import("Transform.zig");
 const TextRenderer = @import("TextRenderer.zig");
+const ParticleRenderer = @import("ParticleRenderer.zig");
 const Player = @import("Player.zig");
 
 pub fn main() !void {
@@ -54,10 +56,13 @@ pub fn main() !void {
 
     var font = try Font.init(allocator, "anonymous_pro");
     defer font.deinit();
-    var renderer = try TextRenderer.init(allocator, &font, view_proj_matrix);
-    defer renderer.deinit();
+    var text_renderer = try TextRenderer.init(allocator, &font, view_proj_matrix);
+    defer text_renderer.deinit();
 
-    var player = try Player.init(allocator, view_proj_matrix);
+    var particle_renderer = try ParticleRenderer.init(allocator, view_proj_matrix);
+    defer particle_renderer.deinit();
+
+    var player = try Player.init(allocator, zlm.vec3(0, 0, -8), view_proj_matrix);
     defer player.deinit();
 
     var timer = try std.time.Timer.start();
@@ -74,19 +79,12 @@ pub fn main() !void {
                 const new_aspect = @as(f32, @floatFromInt(size[0])) / @as(f32, @floatFromInt(size[1]));
                 proj_matrix = zlm.Mat4.createOrthogonal(-new_aspect, new_aspect, -1, 1, -1000, 1000);
                 view_proj_matrix = view_matrix.mul(proj_matrix);
-                renderer.view_proj_matrix = view_proj_matrix;
+                text_renderer.view_proj_matrix = view_proj_matrix;
+                particle_renderer.view_proj_matrix = view_proj_matrix;
                 player.renderer.view_proj_matrix = view_proj_matrix;
             }
 
-            if (events.mouse_button_just_pressed(.left)) {
-                std.debug.print("pressed\n", .{});
-            }
-
-            if (events.mouse_button_just_released(.left)) {
-                std.debug.print("released\n", .{});
-            }
-
-            player.update(dt);
+            player.update(dt, events);
         }
 
         // render
@@ -96,6 +94,9 @@ pub fn main() !void {
 
             // renderer.render("Hello", zlm.Mat4.identity, zlm.Vec4.one);
             // renderer.flush();
+            // const floor_transform: Transform = .{ .position = zlm.vec3(0, -0.1, 0), .scale = zlm.vec3(100.0, 0.01, 100.0) };
+            // particle_renderer.render(floor_transform.compute_matrix(), zlm.vec4(0.6, 0.4, 0.4, 1.0));
+            // particle_renderer.flush();
 
             player.renderer.render();
         }

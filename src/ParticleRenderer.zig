@@ -21,8 +21,8 @@ const UniformData = extern struct {
     instances: [max_cubes]InstanceData,
 };
 
-const vertex_shader_path = "shaders/particle.vert.glsl";
-const fragment_shader_path = "shaders/particle.frag.glsl";
+const vertex_shader_path = "assets/shaders/particle.vert.glsl";
+const fragment_shader_path = "assets/shaders/particle.frag.glsl";
 
 const max_cubes = 100;
 

@@ -5,28 +5,42 @@ const gl = @import("zgl");
 const zlm = @import("zlm");
 
 const animation = @import("animation.zig");
+const Events = @import("Events.zig");
 const Transform = @import("Transform.zig");
 
 const Player = @This();
 
 const State = enum {
     idle,
-    moving,
+    jumping,
 };
 
-const Vertex = extern struct {
-    position: zlm.Vec3,
-    normal: zlm.Vec3,
-    id: f32,
-};
-
+const Vec3Interpolation = animation.Interpolate(zlm.Vec3);
 const TransformInterpolation = animation.Interpolate(Transform);
+
+const idle_animations = [3]TransformInterpolation{
+    .{
+        .initial_state = .{},
+        .final_state = .{},
+        .lerp_func = Transform.lerp,
+    },
+    .{
+        .initial_state = .{},
+        .final_state = .{},
+        .lerp_func = Transform.lerp,
+    },
+    .{
+        .initial_state = .{},
+        .final_state = .{},
+        .lerp_func = Transform.lerp,
+    },
+};
 
 const jump_animations = [3]TransformInterpolation{
     .{
         .initial_state = .{},
         .final_state = .{
-            .position = zlm.vec3(0, 0.6, 0.15),
+            .position = zlm.vec3(0, 0.8, 0.08),
             .rotation = zlm.vec3(zlm.toRadians(10.0), 0, 0),
             .scale = zlm.Vec3.one,
         },
@@ -35,8 +49,8 @@ const jump_animations = [3]TransformInterpolation{
     .{
         .initial_state = .{},
         .final_state = .{
-            .position = zlm.vec3(0, 1.2, 0.4),
-            .rotation = zlm.vec3(zlm.toRadians(20.0), 0, 0),
+            .position = zlm.vec3(0, 1.0, 0.18),
+            .rotation = zlm.vec3(zlm.toRadians(15.0), 0, 0),
             .scale = zlm.Vec3.one,
         },
         .lerp_func = Transform.lerp,
@@ -44,8 +58,8 @@ const jump_animations = [3]TransformInterpolation{
     .{
         .initial_state = .{},
         .final_state = .{
-            .position = zlm.vec3(0, 1.7, 0.8),
-            .rotation = zlm.vec3(zlm.toRadians(30.0), 0, 0),
+            .position = zlm.vec3(0, 1.2, 0.34),
+            .rotation = zlm.vec3(zlm.toRadians(20.0), 0, 0),
             .scale = zlm.Vec3.one,
         },
         .lerp_func = Transform.lerp,
@@ -53,16 +67,24 @@ const jump_animations = [3]TransformInterpolation{
 };
 
 state: State,
+move_controller: animation.Controller,
+move_animation: Vec3Interpolation,
 anim_controller: animation.Controller,
-jump_animations: [3]TransformInterpolation,
+cur_animations: *const [3]TransformInterpolation,
 renderer: Renderer,
 
-pub fn init(allocator: Allocator, view_proj_matrix: zlm.Mat4) !Player {
+pub fn init(allocator: Allocator, position: zlm.Vec3, view_proj_matrix: zlm.Mat4) !Player {
     const renderer = try Renderer.init(allocator, view_proj_matrix);
     return .{
         .state = .idle,
-        .anim_controller = animation.Controller.init(1, animation.functions.easeOutCubic),
-        .jump_animations = jump_animations,
+        .move_controller = animation.Controller.init(1.2, animation.functions.easeOutQuad),
+        .move_animation = .{
+            .initial_state = position,
+            .final_state = position,
+            .lerp_func = zlm.Vec3.lerp,
+        },
+        .anim_controller = animation.Controller.init(1.2, animation.functions.loopBack(animation.functions.easeOutQuad)),
+        .cur_animations = &idle_animations,
         .renderer = renderer,
     };
 }
@@ -71,63 +93,96 @@ pub fn deinit(self: *Player) void {
     self.renderer.deinit();
 }
 
-pub fn update(self: *Player, dt: f32) void {
-    const t = self.anim_controller.update(dt);
-    if (self.anim_controller.done()) self.anim_controller.reset();
+pub fn update(self: *Player, dt: f32, events: *Events) void {
+    const move_t = self.move_controller.update(dt);
+    const anim_t = self.anim_controller.update(dt);
+    // if (self.anim_controller.done()) self.anim_controller.reset(); // repeat
+
+    const should_jump = events.mouse_button_just_pressed(.left);
+    switch (self.state) {
+        .idle => {
+            if (should_jump) {
+                self.state = .jumping;
+                self.move_controller.reset();
+                self.move_animation.final_state = self.move_animation.final_state.add(zlm.vec3(0, 0, 3));
+                self.anim_controller.reset();
+                self.cur_animations = &jump_animations;
+            }
+        },
+        .jumping => {
+            if (self.move_controller.done() and self.anim_controller.done()) {
+                self.state = .idle;
+                self.move_controller.reset();
+                self.move_animation.initial_state = self.move_animation.final_state;
+                self.anim_controller.reset();
+                self.cur_animations = &idle_animations;
+            }
+        },
+    }
 
     // animation
-    var transforms = [3]Transform{
-        jump_animations[0].lerp(t),
-        jump_animations[1].lerp(t),
-        jump_animations[2].lerp(t),
-    };
+    var transforms = [_]Transform{.{}} ** 3;
+
+    inline for (&transforms, 0..) |*transform, i| {
+        transform.position = self.move_animation.lerp(move_t);
+
+        const anim_transform = self.cur_animations[i].lerp(anim_t);
+        transform.position = transform.position.add(anim_transform.position);
+        transform.rotation = transform.rotation.add(anim_transform.rotation);
+    }
 
     // move pieces in position
     inline for (&transforms) |*transform| {
         transform.scale.y *= 0.3;
     }
-    transforms[1].position.y += 0.6;
-    transforms[2].position.y += 1.2;
+    transforms[1].position.y += 0.3;
+    transforms[2].position.y += 0.6;
 
     inline for (transforms, 0..) |transform, i| {
         self.renderer.model_matrices[i] = transform.compute_matrix();
     }
 }
 
+const Vertex = extern struct {
+    position: zlm.Vec3,
+    normal: zlm.Vec3,
+    id: f32,
+};
+
 const vertex_shader_path = "assets/shaders/player.vert.glsl";
 const fragment_shader_path = "assets/shaders/player.frag.glsl";
 
 // zig fmt: off
 const cube_vertices = [_]Vertex{
-    .{ .position = zlm.vec3(-1, -1,  1), .normal = zlm.vec3( 0,  0,  1), .id = 0 },
-    .{ .position = zlm.vec3( 1, -1,  1), .normal = zlm.vec3( 0,  0,  1), .id = 0 },
-    .{ .position = zlm.vec3( 1,  1,  1), .normal = zlm.vec3( 0,  0,  1), .id = 0 },
-    .{ .position = zlm.vec3(-1,  1,  1), .normal = zlm.vec3( 0,  0,  1), .id = 0 },
+    .{ .position = zlm.vec3(-0.5, -0.5,  0.5), .normal = zlm.vec3( 0,  0,  1), .id = 0 },
+    .{ .position = zlm.vec3( 0.5, -0.5,  0.5), .normal = zlm.vec3( 0,  0,  1), .id = 0 },
+    .{ .position = zlm.vec3( 0.5,  0.5,  0.5), .normal = zlm.vec3( 0,  0,  1), .id = 0 },
+    .{ .position = zlm.vec3(-0.5,  0.5,  0.5), .normal = zlm.vec3( 0,  0,  1), .id = 0 },
 
-    .{ .position = zlm.vec3(-1, -1, -1), .normal = zlm.vec3( 0,  0, -1), .id = 0 },
-    .{ .position = zlm.vec3( 1, -1, -1), .normal = zlm.vec3( 0,  0, -1), .id = 0 },
-    .{ .position = zlm.vec3( 1,  1, -1), .normal = zlm.vec3( 0,  0, -1), .id = 0 },
-    .{ .position = zlm.vec3(-1,  1, -1), .normal = zlm.vec3( 0,  0, -1), .id = 0 },
+    .{ .position = zlm.vec3(-0.5, -0.5, -0.5), .normal = zlm.vec3( 0,  0, -1), .id = 0 },
+    .{ .position = zlm.vec3( 0.5, -0.5, -0.5), .normal = zlm.vec3( 0,  0, -1), .id = 0 },
+    .{ .position = zlm.vec3( 0.5,  0.5, -0.5), .normal = zlm.vec3( 0,  0, -1), .id = 0 },
+    .{ .position = zlm.vec3(-0.5,  0.5, -0.5), .normal = zlm.vec3( 0,  0, -1), .id = 0 },
 
-    .{ .position = zlm.vec3(-1, -1, -1), .normal = zlm.vec3(-1,  0,  0), .id = 0 },
-    .{ .position = zlm.vec3(-1, -1,  1), .normal = zlm.vec3(-1,  0,  0), .id = 0 },
-    .{ .position = zlm.vec3(-1,  1,  1), .normal = zlm.vec3(-1,  0,  0), .id = 0 },
-    .{ .position = zlm.vec3(-1,  1, -1), .normal = zlm.vec3(-1,  0,  0), .id = 0 },
+    .{ .position = zlm.vec3(-0.5, -0.5, -0.5), .normal = zlm.vec3(-1,  0,  0), .id = 0 },
+    .{ .position = zlm.vec3(-0.5, -0.5,  0.5), .normal = zlm.vec3(-1,  0,  0), .id = 0 },
+    .{ .position = zlm.vec3(-0.5,  0.5,  0.5), .normal = zlm.vec3(-1,  0,  0), .id = 0 },
+    .{ .position = zlm.vec3(-0.5,  0.5, -0.5), .normal = zlm.vec3(-1,  0,  0), .id = 0 },
 
-    .{ .position = zlm.vec3( 1, -1, -1), .normal = zlm.vec3( 1,  0,  0), .id = 0 },
-    .{ .position = zlm.vec3( 1, -1,  1), .normal = zlm.vec3( 1,  0,  0), .id = 0 },
-    .{ .position = zlm.vec3( 1,  1,  1), .normal = zlm.vec3( 1,  0,  0), .id = 0 },
-    .{ .position = zlm.vec3( 1,  1, -1), .normal = zlm.vec3( 1,  0,  0), .id = 0 },
+    .{ .position = zlm.vec3( 0.5, -0.5, -0.5), .normal = zlm.vec3( 1,  0,  0), .id = 0 },
+    .{ .position = zlm.vec3( 0.5, -0.5,  0.5), .normal = zlm.vec3( 1,  0,  0), .id = 0 },
+    .{ .position = zlm.vec3( 0.5,  0.5,  0.5), .normal = zlm.vec3( 1,  0,  0), .id = 0 },
+    .{ .position = zlm.vec3( 0.5,  0.5, -0.5), .normal = zlm.vec3( 1,  0,  0), .id = 0 },
 
-    .{ .position = zlm.vec3(-1,  1, -1), .normal = zlm.vec3( 0,  1,  0), .id = 0 },
-    .{ .position = zlm.vec3(-1,  1,  1), .normal = zlm.vec3( 0,  1,  0), .id = 0 },
-    .{ .position = zlm.vec3( 1,  1,  1), .normal = zlm.vec3( 0,  1,  0), .id = 0 },
-    .{ .position = zlm.vec3( 1,  1, -1), .normal = zlm.vec3( 0,  1,  0), .id = 0 },
+    .{ .position = zlm.vec3(-0.5,  0.5, -0.5), .normal = zlm.vec3( 0,  1,  0), .id = 0 },
+    .{ .position = zlm.vec3(-0.5,  0.5,  0.5), .normal = zlm.vec3( 0,  1,  0), .id = 0 },
+    .{ .position = zlm.vec3( 0.5,  0.5,  0.5), .normal = zlm.vec3( 0,  1,  0), .id = 0 },
+    .{ .position = zlm.vec3( 0.5,  0.5, -0.5), .normal = zlm.vec3( 0,  1,  0), .id = 0 },
 
-    .{ .position = zlm.vec3(-1, -1, -1), .normal = zlm.vec3( 0, -1,  0), .id = 0 },
-    .{ .position = zlm.vec3(-1, -1,  1), .normal = zlm.vec3( 0, -1,  0), .id = 0 },
-    .{ .position = zlm.vec3( 1, -1,  1), .normal = zlm.vec3( 0, -1,  0), .id = 0 },
-    .{ .position = zlm.vec3( 1, -1, -1), .normal = zlm.vec3( 0, -1,  0), .id = 0 },
+    .{ .position = zlm.vec3(-0.5, -0.5, -0.5), .normal = zlm.vec3( 0, -1,  0), .id = 0 },
+    .{ .position = zlm.vec3(-0.5, -0.5,  0.5), .normal = zlm.vec3( 0, -1,  0), .id = 0 },
+    .{ .position = zlm.vec3( 0.5, -0.5,  0.5), .normal = zlm.vec3( 0, -1,  0), .id = 0 },
+    .{ .position = zlm.vec3( 0.5, -0.5, -0.5), .normal = zlm.vec3( 0, -1,  0), .id = 0 },
 };
 // zig fmt: on
 

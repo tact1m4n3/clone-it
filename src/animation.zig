@@ -53,7 +53,28 @@ pub const functions = struct {
         return x;
     }
 
+    pub fn easeOutQuad(x: f32) f32 {
+        return 1 - (1 - x) * (1 - x);
+    }
+
     pub fn easeOutCubic(x: f32) f32 {
         return 1 - std.math.pow(f32, 1 - x, 3);
+    }
+
+    pub fn reverse(comptime f: EasingFunction) EasingFunction {
+        return struct {
+            pub fn reverseFn(x: f32) f32 {
+                f(1 - x);
+            }
+        }.reverseFn;
+    }
+
+    // could use a different name
+    pub fn loopBack(comptime f: EasingFunction) EasingFunction {
+        return struct {
+            pub fn loopBackFn(x: f32) f32 {
+                return if (x < 0.5) f(x * 2) else f(2 - 2 * x);
+            }
+        }.loopBackFn;
     }
 };
