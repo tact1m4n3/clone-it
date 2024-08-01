@@ -4,7 +4,7 @@ const Allocator = std.mem.Allocator;
 const gl = @import("zgl");
 const zlm = @import("zlm");
 
-const ParticleRenderer = @This();
+const CubeRenderer = @This();
 
 const Vertex = extern struct {
     position: zlm.Vec3,
@@ -21,8 +21,8 @@ const UniformData = extern struct {
     instances: [max_cubes]InstanceData,
 };
 
-const vertex_shader_path = "assets/shaders/particle.vert.glsl";
-const fragment_shader_path = "assets/shaders/particle.frag.glsl";
+const vertex_shader_path = "assets/shaders/cube.vert.glsl";
+const fragment_shader_path = "assets/shaders/cube.frag.glsl";
 
 const max_cubes = 100;
 
@@ -91,7 +91,7 @@ vertex_buffer: gl.Buffer,
 index_buffer: gl.Buffer,
 uniform_buffer: gl.Buffer,
 
-pub fn init(allocator: Allocator, view_proj_matrix: zlm.Mat4) !ParticleRenderer {
+pub fn init(allocator: Allocator, view_proj_matrix: zlm.Mat4) !CubeRenderer {
     const program = create_program: {
         const vertex_shader_source = @embedFile(vertex_shader_path);
         const fragment_shader_source = @embedFile(fragment_shader_path);
@@ -210,7 +210,7 @@ pub fn init(allocator: Allocator, view_proj_matrix: zlm.Mat4) !ParticleRenderer 
     };
 }
 
-pub fn deinit(self: *ParticleRenderer) void {
+pub fn deinit(self: *CubeRenderer) void {
     self.allocator.destroy(self.uniform_data);
     gl.deleteBuffer(self.uniform_buffer);
     gl.deleteBuffer(self.vertex_buffer);
@@ -219,7 +219,7 @@ pub fn deinit(self: *ParticleRenderer) void {
     gl.deleteProgram(self.program);
 }
 
-pub fn render(self: *ParticleRenderer, model_matrix: zlm.Mat4, color: zlm.Vec4) void {
+pub fn render(self: *CubeRenderer, model_matrix: zlm.Mat4, color: zlm.Vec4) void {
     if (self.instance_count >= max_cubes) {
         self.flush();
     }
@@ -229,7 +229,7 @@ pub fn render(self: *ParticleRenderer, model_matrix: zlm.Mat4, color: zlm.Vec4) 
     self.instance_count += 1;
 }
 
-pub fn flush(self: *ParticleRenderer) void {
+pub fn flush(self: *CubeRenderer) void {
     if (self.instance_count == 0) {
         return;
     }

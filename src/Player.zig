@@ -1,90 +1,51 @@
 const std = @import("std");
 const log = std.log.scoped(.player);
 const Allocator = std.mem.Allocator;
+const Timer = std.time.Timer;
 const gl = @import("zgl");
 const zlm = @import("zlm");
 
 const animation = @import("animation.zig");
 const Events = @import("Events.zig");
 const Transform = @import("Transform.zig");
+const ParticleSystem = @import("ParticleSystem.zig");
 
 const Player = @This();
 
-const State = enum {
+const State = union(enum) {
     idle,
-    jumping,
+    move: struct {
+        controller: animation.Controller,
+        animation: Vec3Interpolation,
+    },
+    teleport: union(enum) {
+        despawn: struct {
+            position_controller: animation.Controller,
+            position_animation: Vec3Interpolation,
+            scale_controller: animation.Controller,
+            scale_animation: Vec3Interpolation,
+        },
+        respawn: struct {
+            position_controller: animation.Controller,
+            position_animation: Vec3Interpolation,
+            scale_controller: animation.Controller,
+            scale_animation: Vec3Interpolation,
+        },
+    },
 };
 
 const Vec3Interpolation = animation.Interpolate(zlm.Vec3);
 const TransformInterpolation = animation.Interpolate(Transform);
 
-const idle_animations = [3]TransformInterpolation{
-    .{
-        .initial_state = .{},
-        .final_state = .{},
-        .lerp_func = Transform.lerp,
-    },
-    .{
-        .initial_state = .{},
-        .final_state = .{},
-        .lerp_func = Transform.lerp,
-    },
-    .{
-        .initial_state = .{},
-        .final_state = .{},
-        .lerp_func = Transform.lerp,
-    },
-};
-
-const jump_animations = [3]TransformInterpolation{
-    .{
-        .initial_state = .{},
-        .final_state = .{
-            .position = zlm.vec3(0, 0.8, 0.08),
-            .rotation = zlm.vec3(zlm.toRadians(10.0), 0, 0),
-            .scale = zlm.Vec3.one,
-        },
-        .lerp_func = Transform.lerp,
-    },
-    .{
-        .initial_state = .{},
-        .final_state = .{
-            .position = zlm.vec3(0, 1.0, 0.18),
-            .rotation = zlm.vec3(zlm.toRadians(15.0), 0, 0),
-            .scale = zlm.Vec3.one,
-        },
-        .lerp_func = Transform.lerp,
-    },
-    .{
-        .initial_state = .{},
-        .final_state = .{
-            .position = zlm.vec3(0, 1.2, 0.34),
-            .rotation = zlm.vec3(zlm.toRadians(20.0), 0, 0),
-            .scale = zlm.Vec3.one,
-        },
-        .lerp_func = Transform.lerp,
-    },
-};
-
 state: State,
-move_controller: animation.Controller,
-move_animation: Vec3Interpolation,
-anim_controller: animation.Controller,
-cur_animations: *const [3]TransformInterpolation,
+position: zlm.Vec3,
 renderer: Renderer,
 
 pub fn init(allocator: Allocator, position: zlm.Vec3, view_proj_matrix: zlm.Mat4) !Player {
     const renderer = try Renderer.init(allocator, view_proj_matrix);
     return .{
         .state = .idle,
-        .move_controller = animation.Controller.init(1.2, animation.functions.easeOutQuad),
-        .move_animation = .{
-            .initial_state = position,
-            .final_state = position,
-            .lerp_func = zlm.Vec3.lerp,
-        },
-        .anim_controller = animation.Controller.init(1.2, animation.functions.loopBack(animation.functions.easeOutQuad)),
-        .cur_animations = &idle_animations,
+        .position = position,
         .renderer = renderer,
     };
 }
@@ -93,112 +54,167 @@ pub fn deinit(self: *Player) void {
     self.renderer.deinit();
 }
 
-pub fn update(self: *Player, dt: f32, events: *Events) void {
-    const move_t = self.move_controller.update(dt);
-    const anim_t = self.anim_controller.update(dt);
-    // if (self.anim_controller.done()) self.anim_controller.reset(); // repeat
+pub fn update(self: *Player, dt: f32) void {
+    var transform: Transform = .{};
 
-    const should_jump = events.mouse_button_just_pressed(.left);
     switch (self.state) {
         .idle => {
-            if (should_jump) {
-                self.state = .jumping;
-                self.move_controller.reset();
-                self.move_animation.final_state = self.move_animation.final_state.add(zlm.vec3(0, 0, 3));
-                self.anim_controller.reset();
-                self.cur_animations = &jump_animations;
-            }
+            transform.position = self.position;
         },
-        .jumping => {
-            if (self.move_controller.done() and self.anim_controller.done()) {
+        .move => |*state| {
+            const t = state.controller.update(dt);
+
+            transform.position = state.animation.lerp(t);
+
+            if (state.controller.done()) {
                 self.state = .idle;
-                self.move_controller.reset();
-                self.move_animation.initial_state = self.move_animation.final_state;
-                self.anim_controller.reset();
-                self.cur_animations = &idle_animations;
             }
+        },
+        .teleport => |*tp_state| switch (tp_state.*) {
+            .despawn => |*despawn_state| {
+                const pos_t = despawn_state.position_controller.update(dt);
+                const scale_t = despawn_state.scale_controller.update(dt);
+
+                transform.position = despawn_state.position_animation.lerp(pos_t);
+                transform.scale = despawn_state.scale_animation.lerp(scale_t);
+
+                // const spawn_count = despawn_state.particle_timer.read();
+
+                if (despawn_state.position_controller.done() and despawn_state.scale_controller.done()) {
+                    self.state = .{
+                        .teleport = .{
+                            .respawn = .{
+                                .position_controller = animation.Controller.init(0, 2.0, animation.functions.easeOutCubic),
+                                .position_animation = .{
+                                    .initial_state = zlm.vec3(self.position.x, 8.0, self.position.z),
+                                    .final_state = self.position,
+                                    .lerp_func = zlm.Vec3.lerp,
+                                },
+                                .scale_controller = animation.Controller.init(0, 1.4, animation.functions.easeOutBack),
+                                .scale_animation = .{
+                                    .initial_state = zlm.Vec3.zero,
+                                    .final_state = zlm.Vec3.one,
+                                    .lerp_func = zlm.Vec3.lerp,
+                                },
+                            },
+                        },
+                    };
+                }
+            },
+            .respawn => |*respawn_state| {
+                const pos_t = respawn_state.position_controller.update(dt);
+                const scale_t = respawn_state.scale_controller.update(dt);
+
+                transform.position = respawn_state.position_animation.lerp(pos_t);
+                transform.scale = respawn_state.scale_animation.lerp(scale_t);
+
+                if (respawn_state.position_controller.done() and respawn_state.scale_controller.done()) {
+                    self.state = .idle;
+                }
+            },
         },
     }
 
-    // animation
-    var transforms = [_]Transform{.{}} ** 3;
+    transform.position.y += 0.5;
 
-    inline for (&transforms, 0..) |*transform, i| {
-        transform.position = self.move_animation.lerp(move_t);
+    self.renderer.model_matrix = transform.compute_matrix();
+}
 
-        const anim_transform = self.cur_animations[i].lerp(anim_t);
-        transform.position = transform.position.add(anim_transform.position);
-        transform.rotation = transform.rotation.add(anim_transform.rotation);
+pub fn move(self: *Player, position: zlm.Vec3) bool {
+    if (self.state != .idle) {
+        return false;
     }
 
-    // move pieces in position
-    inline for (&transforms) |*transform| {
-        transform.scale.y *= 0.3;
-    }
-    transforms[1].position.y += 0.3;
-    transforms[2].position.y += 0.6;
+    self.state = .{
+        .move = .{
+            .controller = animation.Controller.init(0, 1.6, animation.functions.easeInOutElastic),
+            .animation = .{
+                .initial_state = self.position,
+                .final_state = position,
+                .lerp_func = zlm.Vec3.lerp,
+            },
+        },
+    };
 
-    inline for (transforms, 0..) |transform, i| {
-        self.renderer.model_matrices[i] = transform.compute_matrix();
+    self.position = position;
+
+    return true;
+}
+
+pub fn teleport(self: *Player, position: zlm.Vec3) bool {
+    if (self.state != .idle) {
+        return false;
     }
+
+    self.state = .{
+        .teleport = .{
+            .despawn = .{
+                .particle_timer = Timer.start() catch unreachable, // this should never fail on a normal computer :))
+                .position_controller = animation.Controller.init(0.6, 2.0, animation.functions.easeInCubic),
+                .position_animation = .{
+                    .initial_state = self.position,
+                    .final_state = zlm.vec3(self.position.x, 8.0, self.position.z),
+                    .lerp_func = zlm.Vec3.lerp,
+                },
+                .scale_controller = animation.Controller.init(0, 1.4, animation.functions.easeInBack),
+                .scale_animation = .{
+                    .initial_state = zlm.Vec3.one,
+                    .final_state = zlm.Vec3.zero,
+                    .lerp_func = zlm.Vec3.lerp,
+                },
+            },
+        },
+    };
+
+    self.position = position;
+
+    return true;
 }
 
 const Vertex = extern struct {
     position: zlm.Vec3,
     normal: zlm.Vec3,
-    id: f32,
 };
 
 const vertex_shader_path = "assets/shaders/player.vert.glsl";
 const fragment_shader_path = "assets/shaders/player.frag.glsl";
 
 // zig fmt: off
-const cube_vertices = [_]Vertex{
-    .{ .position = zlm.vec3(-0.5, -0.5,  0.5), .normal = zlm.vec3( 0,  0,  1), .id = 0 },
-    .{ .position = zlm.vec3( 0.5, -0.5,  0.5), .normal = zlm.vec3( 0,  0,  1), .id = 0 },
-    .{ .position = zlm.vec3( 0.5,  0.5,  0.5), .normal = zlm.vec3( 0,  0,  1), .id = 0 },
-    .{ .position = zlm.vec3(-0.5,  0.5,  0.5), .normal = zlm.vec3( 0,  0,  1), .id = 0 },
+const player_vertices = [_]Vertex{
+    .{ .position = zlm.vec3(-0.5, -0.5,  0.5), .normal = zlm.vec3( 0,  0,  1) },
+    .{ .position = zlm.vec3( 0.5, -0.5,  0.5), .normal = zlm.vec3( 0,  0,  1) },
+    .{ .position = zlm.vec3( 0.5,  0.5,  0.5), .normal = zlm.vec3( 0,  0,  1) },
+    .{ .position = zlm.vec3(-0.5,  0.5,  0.5), .normal = zlm.vec3( 0,  0,  1) },
 
-    .{ .position = zlm.vec3(-0.5, -0.5, -0.5), .normal = zlm.vec3( 0,  0, -1), .id = 0 },
-    .{ .position = zlm.vec3( 0.5, -0.5, -0.5), .normal = zlm.vec3( 0,  0, -1), .id = 0 },
-    .{ .position = zlm.vec3( 0.5,  0.5, -0.5), .normal = zlm.vec3( 0,  0, -1), .id = 0 },
-    .{ .position = zlm.vec3(-0.5,  0.5, -0.5), .normal = zlm.vec3( 0,  0, -1), .id = 0 },
+    .{ .position = zlm.vec3(-0.5, -0.5, -0.5), .normal = zlm.vec3( 0,  0, -1) },
+    .{ .position = zlm.vec3( 0.5, -0.5, -0.5), .normal = zlm.vec3( 0,  0, -1) },
+    .{ .position = zlm.vec3( 0.5,  0.5, -0.5), .normal = zlm.vec3( 0,  0, -1) },
+    .{ .position = zlm.vec3(-0.5,  0.5, -0.5), .normal = zlm.vec3( 0,  0, -1) },
 
-    .{ .position = zlm.vec3(-0.5, -0.5, -0.5), .normal = zlm.vec3(-1,  0,  0), .id = 0 },
-    .{ .position = zlm.vec3(-0.5, -0.5,  0.5), .normal = zlm.vec3(-1,  0,  0), .id = 0 },
-    .{ .position = zlm.vec3(-0.5,  0.5,  0.5), .normal = zlm.vec3(-1,  0,  0), .id = 0 },
-    .{ .position = zlm.vec3(-0.5,  0.5, -0.5), .normal = zlm.vec3(-1,  0,  0), .id = 0 },
+    .{ .position = zlm.vec3(-0.5, -0.5, -0.5), .normal = zlm.vec3(-1,  0,  0) },
+    .{ .position = zlm.vec3(-0.5, -0.5,  0.5), .normal = zlm.vec3(-1,  0,  0) },
+    .{ .position = zlm.vec3(-0.5,  0.5,  0.5), .normal = zlm.vec3(-1,  0,  0) },
+    .{ .position = zlm.vec3(-0.5,  0.5, -0.5), .normal = zlm.vec3(-1,  0,  0) },
 
-    .{ .position = zlm.vec3( 0.5, -0.5, -0.5), .normal = zlm.vec3( 1,  0,  0), .id = 0 },
-    .{ .position = zlm.vec3( 0.5, -0.5,  0.5), .normal = zlm.vec3( 1,  0,  0), .id = 0 },
-    .{ .position = zlm.vec3( 0.5,  0.5,  0.5), .normal = zlm.vec3( 1,  0,  0), .id = 0 },
-    .{ .position = zlm.vec3( 0.5,  0.5, -0.5), .normal = zlm.vec3( 1,  0,  0), .id = 0 },
+    .{ .position = zlm.vec3( 0.5, -0.5, -0.5), .normal = zlm.vec3( 1,  0,  0) },
+    .{ .position = zlm.vec3( 0.5, -0.5,  0.5), .normal = zlm.vec3( 1,  0,  0) },
+    .{ .position = zlm.vec3( 0.5,  0.5,  0.5), .normal = zlm.vec3( 1,  0,  0) },
+    .{ .position = zlm.vec3( 0.5,  0.5, -0.5), .normal = zlm.vec3( 1,  0,  0) },
 
-    .{ .position = zlm.vec3(-0.5,  0.5, -0.5), .normal = zlm.vec3( 0,  1,  0), .id = 0 },
-    .{ .position = zlm.vec3(-0.5,  0.5,  0.5), .normal = zlm.vec3( 0,  1,  0), .id = 0 },
-    .{ .position = zlm.vec3( 0.5,  0.5,  0.5), .normal = zlm.vec3( 0,  1,  0), .id = 0 },
-    .{ .position = zlm.vec3( 0.5,  0.5, -0.5), .normal = zlm.vec3( 0,  1,  0), .id = 0 },
+    .{ .position = zlm.vec3(-0.5,  0.5, -0.5), .normal = zlm.vec3( 0,  1,  0) },
+    .{ .position = zlm.vec3(-0.5,  0.5,  0.5), .normal = zlm.vec3( 0,  1,  0) },
+    .{ .position = zlm.vec3( 0.5,  0.5,  0.5), .normal = zlm.vec3( 0,  1,  0) },
+    .{ .position = zlm.vec3( 0.5,  0.5, -0.5), .normal = zlm.vec3( 0,  1,  0) },
 
-    .{ .position = zlm.vec3(-0.5, -0.5, -0.5), .normal = zlm.vec3( 0, -1,  0), .id = 0 },
-    .{ .position = zlm.vec3(-0.5, -0.5,  0.5), .normal = zlm.vec3( 0, -1,  0), .id = 0 },
-    .{ .position = zlm.vec3( 0.5, -0.5,  0.5), .normal = zlm.vec3( 0, -1,  0), .id = 0 },
-    .{ .position = zlm.vec3( 0.5, -0.5, -0.5), .normal = zlm.vec3( 0, -1,  0), .id = 0 },
+    .{ .position = zlm.vec3(-0.5, -0.5, -0.5), .normal = zlm.vec3( 0, -1,  0) },
+    .{ .position = zlm.vec3(-0.5, -0.5,  0.5), .normal = zlm.vec3( 0, -1,  0) },
+    .{ .position = zlm.vec3( 0.5, -0.5,  0.5), .normal = zlm.vec3( 0, -1,  0) },
+    .{ .position = zlm.vec3( 0.5, -0.5, -0.5), .normal = zlm.vec3( 0, -1,  0) },
 };
 // zig fmt: on
 
-const player_vertices = create_vertices: {
-    var vertices = cube_vertices ** 3;
-    for (cube_vertices.len..cube_vertices.len * 2) |i| {
-        vertices[i].id = 1;
-    }
-    for (cube_vertices.len * 2..cube_vertices.len * 3) |i| {
-        vertices[i].id = 2;
-    }
-    break :create_vertices vertices;
-};
-
 const player_indices = create_indices: {
-    var indices: [3 * 36]u8 = undefined;
+    var indices: [36]u8 = undefined;
 
     var offset: u32 = 0;
     var i: u32 = 0;
@@ -219,7 +235,7 @@ const player_indices = create_indices: {
 
 const Renderer = struct {
     view_proj_matrix: zlm.Mat4,
-    model_matrices: [3]zlm.Mat4,
+    model_matrix: zlm.Mat4,
     program: gl.Program,
     view_proj_matrix_uniform: u32,
     model_matrix_uniform: u32,
@@ -317,16 +333,6 @@ const Renderer = struct {
                     @sizeOf(Vertex),
                     @offsetOf(Vertex, "normal"),
                 );
-
-                gl.enableVertexAttribArray(2);
-                gl.vertexAttribPointer(
-                    2,
-                    1,
-                    .float,
-                    false,
-                    @sizeOf(Vertex),
-                    @offsetOf(Vertex, "id"),
-                );
             }
 
             gl.bindBuffer(index_buffer, .element_array_buffer);
@@ -335,7 +341,7 @@ const Renderer = struct {
 
         return .{
             .view_proj_matrix = view_proj_matrix,
-            .model_matrices = [_]zlm.Mat4{zlm.Mat4.identity} ** 3,
+            .model_matrix = zlm.Mat4.identity,
             .program = program,
             .view_proj_matrix_uniform = view_proj_matrix_uniform,
             .model_matrix_uniform = model_matrix_uniform,
@@ -357,11 +363,7 @@ const Renderer = struct {
         defer gl.useProgram(.invalid);
 
         gl.uniformMatrix4fv(renderer.view_proj_matrix_uniform, false, &[_][4][4]f32{renderer.view_proj_matrix.fields});
-        gl.uniformMatrix4fv(renderer.model_matrix_uniform, false, &[_][4][4]f32{
-            renderer.model_matrices[0].fields,
-            renderer.model_matrices[1].fields,
-            renderer.model_matrices[2].fields,
-        });
+        gl.uniformMatrix4fv(renderer.model_matrix_uniform, false, &[_][4][4]f32{renderer.model_matrix.fields});
 
         gl.bindVertexArray(renderer.vertex_array);
         defer gl.bindVertexArray(.invalid);

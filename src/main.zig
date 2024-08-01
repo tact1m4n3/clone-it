@@ -8,7 +8,7 @@ const Events = @import("Events.zig");
 const Font = @import("Font.zig");
 const Transform = @import("Transform.zig");
 const TextRenderer = @import("TextRenderer.zig");
-const ParticleRenderer = @import("ParticleRenderer.zig");
+const CubeRenderer = @import("CubeRenderer.zig");
 const Player = @import("Player.zig");
 
 pub fn main() !void {
@@ -59,10 +59,17 @@ pub fn main() !void {
     var text_renderer = try TextRenderer.init(allocator, &font, view_proj_matrix);
     defer text_renderer.deinit();
 
-    var particle_renderer = try ParticleRenderer.init(allocator, view_proj_matrix);
-    defer particle_renderer.deinit();
+    var cube_renderer = try CubeRenderer.init(allocator, view_proj_matrix);
+    defer cube_renderer.deinit();
 
-    var player = try Player.init(allocator, zlm.vec3(0, 0, -8), view_proj_matrix);
+    var prng = std.rand.DefaultPrng.init(blk: {
+        var seed: u64 = undefined;
+        try std.posix.getrandom(std.mem.asBytes(&seed));
+        break :blk seed;
+    });
+    const random = prng.random();
+
+    var player = try Player.init(allocator, zlm.vec3(0, 0, 0), view_proj_matrix);
     defer player.deinit();
 
     var timer = try std.time.Timer.start();
@@ -78,13 +85,22 @@ pub fn main() !void {
             if (events.resized()) |size| {
                 const new_aspect = @as(f32, @floatFromInt(size[0])) / @as(f32, @floatFromInt(size[1]));
                 proj_matrix = zlm.Mat4.createOrthogonal(-new_aspect, new_aspect, -1, 1, -1000, 1000);
-                view_proj_matrix = view_matrix.mul(proj_matrix);
+                // view_proj_matrix = view_matrix.mul(proj_matrix);
+                view_proj_matrix = proj_matrix;
                 text_renderer.view_proj_matrix = view_proj_matrix;
-                particle_renderer.view_proj_matrix = view_proj_matrix;
+                cube_renderer.view_proj_matrix = view_proj_matrix;
                 player.renderer.view_proj_matrix = view_proj_matrix;
             }
 
-            player.update(dt, events);
+            if (events.mouse_button_just_pressed(.left)) {
+                if (random.float(f32) > 0.5) {
+                    _ = player.move(zlm.vec3(0, 0, 2));
+                } else {
+                    _ = player.teleport(zlm.vec3(random.floatNorm(f32) * 2, 0, random.floatNorm(f32) * 2));
+                }
+            }
+
+            player.update(dt);
         }
 
         // render

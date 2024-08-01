@@ -3,7 +3,7 @@ const Allocator = std.mem.Allocator;
 const gl = @import("zgl");
 const zlm = @import("zlm");
 
-const Renderer = @import("ParticleRenderer.zig");
+const CubeRenderer = @import("CubeRenderer.zig");
 const Transform = @import("Transform.zig");
 
 const Self = @This();
@@ -15,7 +15,7 @@ const Particle = struct {
     velocity: zlm.Vec3 = zlm.Vec3.zero,
     velocity_variation: zlm.Vec3 = zlm.Vec3.zero,
     angular_momentum: zlm.Vec3 = zlm.Vec3.zero,
-    scale_variation: f32 = 0,
+    scale_variation: zlm.Vec3 = zlm.Vec3.zero,
 
     color: zlm.Vec4 = zlm.Vec4.zero,
     color_variation: zlm.Vec4 = zlm.Vec4.zero,
@@ -91,7 +91,7 @@ pub fn update(self: *Self, dt: f32) void {
         particle.velocity = particle.velocity.add(particle.velocity_variation.scale(dt));
         particle.transform.position = particle.transform.position.add(particle.velocity.scale(dt));
         particle.transform.rotation = particle.transform.rotation.add(particle.angular_momentum.scale(dt));
-        particle.transform.scale = particle.transform.scale + particle.scale_variation * dt;
+        particle.transform.scale = particle.transform.scale.add(particle.scale_variation.scale(dt));
         particle.color = particle.color.add(particle.color_variation.scale(dt));
         particle.life_remaining -= dt;
         if (particle.life_remaining <= 0)
@@ -99,7 +99,7 @@ pub fn update(self: *Self, dt: f32) void {
     }
 }
 
-pub fn render(self: *Self, renderer: *Renderer) void {
+pub fn render(self: *Self, renderer: *CubeRenderer) void {
     // TODO: maybe before rendering we should sort the particles in terms of their position for transparency to work
 
     for (self.particles) |*particle| {
