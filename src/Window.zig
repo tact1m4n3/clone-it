@@ -14,7 +14,7 @@ pub const Settings = struct {
 
 inner: *c.struct_GLFWwindow,
 
-fn log_glfw_error(code: c_int, description: [*c]const u8) callconv(.C) void {
+fn logGlfwError(code: c_int, description: [*c]const u8) callconv(.C) void {
     log.err("{d}: {s}", .{ code, description });
 }
 
@@ -24,7 +24,7 @@ pub fn init(settings: Settings) !Window {
     }
     errdefer _ = c.glfwTerminate();
 
-    _ = c.glfwSetErrorCallback(log_glfw_error);
+    _ = c.glfwSetErrorCallback(logGlfwError);
 
     c.glfwWindowHint(c.GLFW_CONTEXT_VERSION_MAJOR, 4);
     c.glfwWindowHint(c.GLFW_CONTEXT_VERSION_MINOR, 1);
@@ -34,6 +34,8 @@ pub fn init(settings: Settings) !Window {
     };
 
     c.glfwMakeContextCurrent(inner);
+
+    c.glfwSwapInterval(1);
 
     log.debug("Created glfw window with settings: {any}", .{settings});
 

@@ -3,120 +3,195 @@ const c = @import("c.zig");
 const gl = @import("zgl");
 const zlm = @import("zlm");
 
-const Window = @import("Window.zig");
-const Events = @import("Events.zig");
-const Font = @import("Font.zig");
-const Transform = @import("Transform.zig");
-const TextRenderer = @import("TextRenderer.zig");
-const CubeRenderer = @import("CubeRenderer.zig");
-const Player = @import("Player.zig");
+const World = @import("World.zig");
+
+const glfw = c.glfw;
+const stbi = c.stbi;
+
+const zlm_f64 = zlm.SpecializeOn(f64);
+
+pub const AppData = struct {
+    screen: struct {
+        width: usize,
+        height: usize,
+        aspect_ratio: gl.Float,
+    },
+    mouse: struct {
+        position: zlm_f64.Vec2,
+        left_down: ?struct {
+            down: zlm_f64.Vec2,
+            is_event: bool, // TODO: Rename this field
+        },
+        right_down: ?struct {
+            down: zlm_f64.Vec2,
+            is_event: bool, // TODO: Rename this field
+        },
+        scroll: ?struct {
+            y_offset: f64,
+        },
+    },
+    key: struct {
+        is_shift: bool,
+    },
+};
 
 pub fn main() !void {
     var gpa = std.heap.GeneralPurposeAllocator(.{}){};
+    defer std.debug.assert(gpa.deinit() == .ok);
     const allocator = gpa.allocator();
-    defer _ = gpa.deinit();
 
-    const window = try Window.init(.{
-        .width = 1280,
-        .height = 720,
-        .title = "Hello title",
-    });
-    defer window.deinit();
-
-    const events = Events.init(window);
-
-    // idk if we should leave these here
-    {
-        try gl.loadExtensions(0, struct {
-            pub fn getProc(comptime _: comptime_int, name: [:0]const u8) ?*align(4) const anyopaque {
-                if (c.glfwGetProcAddress(name)) |func| {
-                    return func;
-                } else {
-                    return @ptrCast(&struct {
-                        pub fn procNotFound() callconv(.C) noreturn {
-                            @panic("opengl function not supported");
-                        }
-                    }.procNotFound);
-                }
-            }
-        }.getProc);
-
-        gl.enable(.blend);
-        gl.blendFunc(.src_alpha, .one_minus_src_alpha);
-
-        gl.enable(.depth_test);
-        gl.depthFunc(.less);
+    if (glfw.glfwInit() == glfw.GLFW_FALSE) {
+        @panic("TODO: Handle error!");
     }
+    defer glfw.glfwTerminate();
 
-    const aspect = 1280.0 / 720.0;
-    // var proj_matrix = zlm.Mat4.createPerspective(zlm.toRadians(45.0), aspect, 0.1, 1000);
-    var proj_matrix = zlm.Mat4.createOrthogonal(3 * -aspect, 3 * aspect, -3, 3, -1000, 1000);
-    const view_matrix = zlm.Mat4.createLookAt(zlm.vec3(8, 4, 8), zlm.vec3(0, 1, 0), zlm.vec3(0, 1, 0));
-    var view_proj_matrix = view_matrix.mul(proj_matrix);
+    var app_data = AppData{
+        .screen = undefined,
+        .mouse = .{
+            .position = undefined,
+            .left_down = null,
+            .right_down = null,
+            .scroll = null,
+        },
+        .key = .{
+            .is_shift = false,
+        },
+    };
 
-    var font = try Font.init(allocator, "anonymous_pro");
-    defer font.deinit();
-    var text_renderer = try TextRenderer.init(allocator, &font, view_proj_matrix);
-    defer text_renderer.deinit();
+    glfw.glfwWindowHint(glfw.GLFW_VERSION_MAJOR, 4);
+    glfw.glfwWindowHint(glfw.GLFW_VERSION_MINOR, 1);
 
-    var cube_renderer = try CubeRenderer.init(allocator, view_proj_matrix);
-    defer cube_renderer.deinit();
+    const window = glfw.glfwCreateWindow(600, 400, "TODO: Add a title", null, null) orelse @panic("TODO: Handle error!");
+    defer glfw.glfwDestroyWindow(window);
 
-    var prng = std.rand.DefaultPrng.init(blk: {
-        var seed: u64 = undefined;
-        try std.posix.getrandom(std.mem.asBytes(&seed));
-        break :blk seed;
-    });
-    const random = prng.random();
+    glfw.glfwSetWindowUserPointer(window, &app_data);
 
-    var player = try Player.init(allocator, zlm.vec3(0, 0, 0), view_proj_matrix);
-    defer player.deinit();
+    _ = glfw.glfwSetFramebufferSizeCallback(window, onFramebufferSize);
+    _ = glfw.glfwSetMouseButtonCallback(window, onMouseButton);
+    _ = glfw.glfwSetScrollCallback(window, onScroll);
 
-    var timer = try std.time.Timer.start();
+    glfw.glfwMakeContextCurrent(window);
 
-    while (!window.shouldClose()) {
-        events.reset();
-        window.pollEvents();
+    glfw.glfwSwapInterval(1);
 
-        // update
-        {
-            const dt = @as(f32, @floatFromInt(timer.lap())) / @as(f32, @floatFromInt(std.time.ns_per_s));
-
-            if (events.resized()) |size| {
-                const new_aspect = @as(f32, @floatFromInt(size[0])) / @as(f32, @floatFromInt(size[1]));
-                proj_matrix = zlm.Mat4.createOrthogonal(-new_aspect, new_aspect, -1, 1, -1000, 1000);
-                // view_proj_matrix = view_matrix.mul(proj_matrix);
-                view_proj_matrix = proj_matrix;
-                text_renderer.view_proj_matrix = view_proj_matrix;
-                cube_renderer.view_proj_matrix = view_proj_matrix;
-                player.renderer.view_proj_matrix = view_proj_matrix;
-            }
-
-            if (events.mouse_button_just_pressed(.left)) {
-                if (random.float(f32) > 0.5) {
-                    _ = player.move(zlm.vec3(0, 0, 2));
-                } else {
-                    _ = player.teleport(zlm.vec3(random.floatNorm(f32) * 2, 0, random.floatNorm(f32) * 2));
+    try gl.loadExtensions(.{}, struct {
+        pub fn getProcAddress(_: @TypeOf(.{}), procname: [:0]const u8) ?gl.binding.FunctionPointer {
+            return glfw.glfwGetProcAddress(procname) orelse struct {
+                pub fn procNotFound() callconv(.C) noreturn {
+                    @panic("Unsupported OpenGL function");
                 }
+            }.procNotFound;
+        }
+    }.getProcAddress);
+
+    glfw.glfwMaximizeWindow(window);
+
+    gl.enable(.cull_face);
+    gl.enable(.depth_test);
+    gl.depthFunc(.less_or_equal);
+    gl.enable(.blend);
+    gl.blendFunc(.src_alpha, .one_minus_src_alpha);
+
+    gl.clearColor(0.0, 1.0, 1.0, 1.0);
+
+    var world = try World.init(allocator);
+    defer world.deinit();
+
+    world.grid_renderer.uploadData();
+    world.blocks_renderer.uploadBlockAtlas();
+    world.blocks_renderer.uploadData();
+
+    while (glfw.glfwWindowShouldClose(window) == glfw.GLFW_FALSE) {
+        glfw.glfwPollEvents();
+
+        // Update
+        {
+            {
+                // TODO: Ensure no DPI scaling has to be done
+                var xpos: f64 = undefined;
+                var ypos: f64 = undefined;
+
+                glfw.glfwGetCursorPos(window, &xpos, &ypos);
+
+                app_data.mouse.position = .{ .x = xpos, .y = ypos };
             }
 
-            player.update(dt);
+            if (glfw.glfwGetKey(window, glfw.GLFW_KEY_ESCAPE) != glfw.GLFW_RELEASE) {
+                glfw.glfwSetWindowShouldClose(window, glfw.GLFW_TRUE);
+            }
+
+            // TODO: Also check for modifiers potentially
+            app_data.key.is_shift = glfw.glfwGetKey(window, glfw.GLFW_KEY_LEFT_SHIFT) != glfw.GLFW_RELEASE or glfw.glfwGetKey(window, glfw.GLFW_KEY_RIGHT_SHIFT) != glfw.GLFW_RELEASE;
+
+            world.update(app_data);
+            world.grid_renderer.update(app_data);
+            world.blocks_renderer.update(app_data);
         }
 
-        // render
+        // Render
         {
-            gl.clearColor(0, 0, 0, 0);
             gl.clear(.{ .color = true, .depth = true });
 
-            // renderer.render("Hello", zlm.Mat4.identity, zlm.Vec4.one);
-            // renderer.flush();
-            // const floor_transform: Transform = .{ .position = zlm.vec3(0, -0.1, 0), .scale = zlm.vec3(100.0, 0.01, 100.0) };
-            // particle_renderer.render(floor_transform.compute_matrix(), zlm.vec4(0.6, 0.4, 0.4, 1.0));
-            // particle_renderer.flush();
-
-            player.renderer.render();
+            world.grid_renderer.render();
+            world.blocks_renderer.render();
         }
 
-        window.swapBuffers();
+        glfw.glfwSwapBuffers(window);
+
+        if (app_data.mouse.left_down) |*left| {
+            left.is_event = false;
+        }
+
+        if (app_data.mouse.right_down) |*right| {
+            right.is_event = false;
+        }
+
+        app_data.mouse.scroll = null;
     }
+}
+
+fn onFramebufferSize(window: ?*glfw.GLFWwindow, width: c_int, height: c_int) callconv(.C) void {
+    const app_data: *AppData = @alignCast(@ptrCast(glfw.glfwGetWindowUserPointer(window.?)));
+
+    app_data.screen.width = @intCast(width);
+    app_data.screen.height = @intCast(height);
+    app_data.screen.aspect_ratio = if (height == 0) 0.0 else @as(gl.Float, @floatFromInt(width)) / @as(gl.Float, @floatFromInt(height));
+
+    gl.viewport(0, 0, app_data.screen.width, app_data.screen.height);
+}
+
+fn onMouseButton(window: ?*glfw.GLFWwindow, button: c_int, action: c_int, mods: c_int) callconv(.C) void {
+    _ = mods;
+
+    const app_data: *AppData = @alignCast(@ptrCast(glfw.glfwGetWindowUserPointer(window.?)));
+
+    switch (button) {
+        // TODO: Ensure this is exhaustive
+        glfw.GLFW_MOUSE_BUTTON_LEFT => app_data.mouse.left_down = switch (action) {
+            glfw.GLFW_PRESS => .{
+                .down = app_data.mouse.position,
+                .is_event = true,
+            },
+            glfw.GLFW_RELEASE => null,
+            else => unreachable,
+        },
+        glfw.GLFW_MOUSE_BUTTON_RIGHT => app_data.mouse.right_down = switch (action) {
+            glfw.GLFW_PRESS => .{
+                .down = app_data.mouse.position,
+                .is_event = true,
+            },
+            glfw.GLFW_RELEASE => null,
+            else => unreachable,
+        },
+        else => {},
+    }
+}
+
+fn onScroll(window: ?*glfw.GLFWwindow, xoffset: f64, yoffset: f64) callconv(.C) void {
+    _ = xoffset;
+
+    const app_data: *AppData = @alignCast(@ptrCast(glfw.glfwGetWindowUserPointer(window.?)));
+
+    // TODO: Ensure no DPI scaling has to be done (it doesn't really matter for this app, tho)
+    app_data.mouse.scroll = .{ .y_offset = yoffset };
 }
