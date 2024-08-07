@@ -85,7 +85,7 @@ pub const Button = struct {
             },
             .mouse_button => |e| {
                 if (self.state == .hover_in and e.button == .left and e.action == .press) {
-                    app.state.assets.click_sound.play();
+                    app.state.sounds.click.play();
 
                     self.state = .{
                         .click = .{

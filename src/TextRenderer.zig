@@ -201,7 +201,7 @@ pub fn render(self: *TextRenderer, text: Text, model_matrix: zlm.Mat4, view_proj
     if (text.str.len == 0)
         return;
 
-    const font = &app.state.assets.font;
+    const font = &app.state.font;
 
     if (self.atlas_texture != font.atlas_texture)
         self.flush(view_proj_matrix);

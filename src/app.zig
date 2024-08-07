@@ -9,7 +9,8 @@ const zaudio = @import("zaudio");
 const zlm_f64 = zlm.SpecializeOn(f64);
 
 const c = @import("c.zig");
-const Assets = @import("Assets.zig");
+const Font = @import("Font.zig");
+const Sound = @import("Sound.zig");
 const Scene = @import("Scene.zig");
 const SceneRunner = @import("SceneRunner.zig");
 const MenuScene = @import("scenes/Menu.zig");
@@ -19,7 +20,11 @@ const LevelPlayerScene = @import("scenes/LevelPlayer.zig");
 pub const State = struct {
     window: ?*c.struct_GLFWwindow,
     audio_engine: *zaudio.Engine,
-    assets: *Assets,
+    font: Font = undefined,
+    sounds: struct {
+        background: Sound,
+        click: Sound,
+    } = undefined,
     menu_scene: MenuScene = undefined,
     level_picker_scene: LevelPickerScene = undefined,
     level_player_scene: LevelPlayerScene = undefined,
@@ -92,16 +97,21 @@ pub fn run() !void {
     const audio_engine = try zaudio.Engine.create(null);
     defer audio_engine.destroy();
 
-    var assets = try Assets.init(allocator, audio_engine);
-    defer assets.deinit();
-
     state = .{
         .window = window,
         .audio_engine = audio_engine,
-        .assets = &assets,
     };
 
-    assets.background_sound.play();
+    state.font = try Font.init(allocator);
+    defer state.font.deinit();
+
+    state.sounds.background = try Sound.init(audio_engine, "background.mp3", .{ .volume = 0.2, .loop = true });
+    defer state.sounds.background.deinit();
+
+    state.sounds.click = try Sound.init(audio_engine, "click.mp3", .{});
+    defer state.sounds.click.deinit();
+
+    state.sounds.background.play();
 
     state.menu_scene = try MenuScene.init(allocator, random);
     defer state.menu_scene.deinit();
@@ -112,8 +122,8 @@ pub fn run() !void {
     state.level_player_scene = try LevelPlayerScene.init(allocator, random);
     defer state.level_player_scene.deinit();
 
-    state.scene_runner = try SceneRunner.init(allocator, Scene.from(LevelPlayerScene, &state.level_player_scene));
-    // state.scene_runner = try SceneRunner.init(allocator, Scene.from(MenuScene, &state.menu_scene));
+    // state.scene_runner = try SceneRunner.init(allocator, Scene.from(LevelPlayerScene, &state.level_player_scene));
+    state.scene_runner = try SceneRunner.init(allocator, Scene.from(MenuScene, &state.menu_scene));
     defer state.scene_runner.deinit();
 
     var timer = Timer.start() catch unreachable;

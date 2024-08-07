@@ -19,7 +19,7 @@ str: []const u8,
 rect: Rect,
 
 pub fn init(str: []const u8, anchor: Anchor) Text {
-    const font = &app.state.assets.font;
+    const font = &app.state.font;
 
     var width: f32 = 0;
     var current_width: f32 = 0;

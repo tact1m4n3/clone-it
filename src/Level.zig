@@ -13,9 +13,7 @@ const max_level_data_size = 0x1000;
 const Level = @This();
 
 allocator: Allocator,
-min_position: uzlm.Vec2,
-max_position: uzlm.Vec2,
-level_size: uzlm.Vec2,
+offset: zlm.Vec2,
 clones: []Clone,
 layout: [max_level_height][max_level_width]?Block,
 
@@ -93,11 +91,12 @@ pub fn init(allocator: Allocator, id: u8) !Level {
         }
     }
 
+    const level_size = max_position.sub(min_position);
+    const offset = uvec2_to_vec2(min_position).add(uvec2_to_vec2(level_size).scale(1.0 / 2.0));
+
     return .{
         .allocator = allocator,
-        .min_position = min_position,
-        .max_position = max_position,
-        .level_size = max_position.sub(min_position),
+        .offset = offset,
         .clones = clones,
         .layout = layout,
     };
@@ -108,9 +107,7 @@ pub fn deinit(self: Level) void {
 }
 
 pub inline fn tile_to_world(self: Level, tile: uzlm.Vec2) zlm.Vec3 {
-    const offset_x = @as(f32, @floatFromInt(self.min_position.x)) + @as(f32, @floatFromInt(self.level_size.x)) / 2;
-    const offset_y = @as(f32, @floatFromInt(self.min_position.y)) + @as(f32, @floatFromInt(self.level_size.y)) / 2;
-    return zlm.vec3(@as(f32, @floatFromInt(tile.x)) - offset_x, 0, offset_y - @as(f32, @floatFromInt(tile.y)));
+    return zlm.vec3(@as(f32, @floatFromInt(tile.x)) - self.offset.x, 0, self.offset.y - @as(f32, @floatFromInt(tile.y)));
 }
 
 pub fn render(self: Level, cube_renderer: *CubeRenderer, model_matrix: zlm.Mat4, view_proj_matrix: zlm.Mat4) void {
@@ -172,3 +169,7 @@ pub const Block = union(BlockKind) {
         active: bool,
     },
 };
+
+fn uvec2_to_vec2(v: uzlm.Vec2) zlm.Vec2 {
+    return zlm.vec2(@floatFromInt(v.x), @floatFromInt(v.y));
+}
