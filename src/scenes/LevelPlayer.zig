@@ -8,6 +8,7 @@ const app = @import("../app.zig");
 const Event = app.Event;
 const Player = @import("../Player.zig");
 const CubeRenderer = @import("../CubeRenderer.zig");
+const Level = @import("../Level.zig");
 const World = @import("../World.zig");
 
 const LevelPlayerScene = @This();
@@ -17,8 +18,9 @@ proj_matrix: zlm.Mat4,
 view_matrix: zlm.Mat4,
 view_proj_matrix: zlm.Mat4,
 cube_renderer: CubeRenderer,
-player: Player,
+level: Level,
 world: World,
+player: Player,
 
 pub fn init(allocator: Allocator, random: Random) !LevelPlayerScene {
     const frame_buffer_size = app.getFramebufferSize();
@@ -32,12 +34,14 @@ pub fn init(allocator: Allocator, random: Random) !LevelPlayerScene {
     var cube_renderer = try CubeRenderer.init(allocator);
     errdefer cube_renderer.deinit();
 
-    const player = Player.init(zlm.vec3(-4, 0, -3), zlm.vec4(0.8, 0.8, 0.8, 1));
+    const level = try Level.init(allocator, 1);
 
     const world = try World.init(allocator);
     world.grid_renderer.uploadData();
     world.blocks_renderer.uploadBlockAtlas();
     world.blocks_renderer.uploadData();
+
+    const player = Player.init(level.tile_to_world(level.clones[0].start_position), zlm.vec4(0.8, 0.8, 0.8, 1));
 
     return .{
         .random = random,
@@ -45,13 +49,15 @@ pub fn init(allocator: Allocator, random: Random) !LevelPlayerScene {
         .view_matrix = view_matrix,
         .view_proj_matrix = view_proj_matrix,
         .cube_renderer = cube_renderer,
-        .player = player,
+        .level = level,
         .world = world,
+        .player = player,
     };
 }
 
 pub fn deinit(self: *LevelPlayerScene) void {
     self.cube_renderer.deinit();
+    self.level.deinit();
     self.world.deinit();
 }
 
@@ -64,10 +70,10 @@ pub fn on_event(self_opaque: *anyopaque, event: Event) void {
             self.proj_matrix = zlm.Mat4.createOrthogonal(3 * -aspect, 3 * aspect, -3, 3, -1000, 1000);
             self.view_proj_matrix = self.view_matrix.mul(self.proj_matrix);
         },
-        .mouse_button => |e| {
-            if (e.button == .left and e.action == .press) {
-                _ = self.player.move(zlm.vec3(-3, 0, -3));
-            }
+        .mouse_button => |_| {
+            // if (e.button == .left and e.action == .press) {
+            //     _ = self.player.move(zlm.vec3(-3, 0, -3));
+            // }
         },
         else => {},
     }
@@ -90,9 +96,9 @@ pub fn render(self_opaque: *anyopaque) void {
     gl.clearColor(0.541, 0.776, 0.816, 1);
     gl.clear(.{ .color = true, .depth = true });
 
-    self.world.grid_renderer.render();
-    self.world.blocks_renderer.render();
-
+    // self.world.grid_renderer.render();
+    // self.world.blocks_renderer.render();
+    self.level.render(&self.cube_renderer, zlm.Mat4.identity, self.view_proj_matrix);
     self.player.render(&self.cube_renderer, self.view_proj_matrix);
     self.cube_renderer.flush(self.view_proj_matrix);
 }

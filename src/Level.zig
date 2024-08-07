@@ -1,73 +1,62 @@
 const std = @import("std");
+const Allocator = std.mem.Allocator;
 const zlm = @import("zlm");
 
-const uzlm = zlm.SpecializeOn(i32);
+const uzlm = zlm.SpecializeOn(u32);
 
 const CubeRenderer = @import("CubeRenderer.zig");
 
-pub const Clone = struct {
-    start_position: uzlm.Vec2,
-    target_position: uzlm.Vec2,
-};
-
-pub const BlockType = enum(u8) {
-    ground = 0,
-    button = 1,
-    portal = 2,
-};
-
-pub const Block = union(BlockType) {
-    ground,
-    button: uzlm.Vec2,
-    portal: uzlm.Vec2,
-};
-
-pub const BlockState = union(BlockType) {
-    ground,
-    button: bool,
-    portal: bool,
-};
-
-pub const Layout = struct {};
-
-const level_width = 16;
-const level_height = 16;
-const clone_count = 2;
+const max_level_width = 16;
+const max_level_height = 16;
+const max_level_data_size = 0x1000;
 
 const Level = @This();
 
+allocator: Allocator,
 min_position: uzlm.Vec2,
 max_position: uzlm.Vec2,
-clones: [clone_count]Clone,
-layout: [level_height][level_width]?Block,
+level_size: uzlm.Vec2,
+clones: []Clone,
+layout: [max_level_height][max_level_width]?Block,
 
-fn load_level(name: []const u8) Level {
-    @setEvalBranchQuota(2000);
+pub fn init(allocator: Allocator, id: u8) !Level {
+    var buf: [3]u8 = undefined;
+    const n = std.fmt.formatIntBuf(&buf, id, 10, .lower, .{});
+    var level_dir = try std.fs.cwd().makeOpenPath("assets/levels/", .{});
+    defer level_dir.close();
 
-    const data = @embedFile("assets/levels/" ++ name);
+    const data = try level_dir.readFileAlloc(allocator, buf[0..n], max_level_data_size);
+    defer allocator.free(data);
+
     var parts = std.mem.split(u8, std.mem.trimRight(u8, data, "\n"), "\n\n");
     const clone_part = parts.next().?;
     const layout_part = parts.next().?;
 
-    var clones: [clone_count]Clone = undefined;
-
     var clone_iter = std.mem.split(u8, clone_part, "\n");
-    for (&clones) |*clone| {
+    const clone_count = std.fmt.parseInt(u8, clone_iter.next().?, 10) catch unreachable;
+
+    const clones = try allocator.alloc(Clone, clone_count);
+    for (clones) |*clone| {
         const clone_data = clone_iter.next().?;
         var props = std.mem.split(u8, clone_data, ",");
+
         const start_pos_x = std.fmt.parseInt(u32, props.next().?, 10) catch unreachable;
         const start_pos_y = std.fmt.parseInt(u32, props.next().?, 10) catch unreachable;
         const target_pos_x = std.fmt.parseInt(u32, props.next().?, 10) catch unreachable;
         const target_pos_y = std.fmt.parseInt(u32, props.next().?, 10) catch unreachable;
+
+        const start_position = uzlm.vec2(start_pos_x, start_pos_y);
+
         clone.* = .{
-            .start_position = uzlm.vec2(start_pos_x, start_pos_y),
+            .start_position = start_position,
+            .current_position = start_position,
             .target_position = uzlm.vec2(target_pos_x, target_pos_y),
         };
     }
 
-    var layout: [level_height][level_width]?Block = [_][level_width]?Block{[_]?Block{null} ** level_width} ** level_height;
+    var layout: [max_level_height][max_level_width]?Block = [_][max_level_width]?Block{[_]?Block{null} ** max_level_width} ** max_level_height;
 
-    var min_position = uzlm.vec2(level_width, level_height);
+    var min_position = uzlm.vec2(max_level_width, max_level_height);
     var max_position = uzlm.vec2(0, 0);
 
     var block_iter = std.mem.split(u8, layout_part, "\n");
@@ -82,49 +71,62 @@ fn load_level(name: []const u8) Level {
         if (pos_y < min_position.y) min_position.y = pos_y;
         if (pos_y > max_position.y) max_position.y = pos_y;
 
-        const typ: BlockType = @enumFromInt(std.fmt.parseInt(u32, props.next().?, 10) catch unreachable);
+        const typ: BlockKind = @enumFromInt(std.fmt.parseInt(u32, props.next().?, 10) catch unreachable);
         switch (typ) {
             .ground => layout[pos_y][pos_x] = .ground,
             .button => {
                 const x = std.fmt.parseInt(u32, props.next().?, 10) catch unreachable;
                 const y = std.fmt.parseInt(u32, props.next().?, 10) catch unreachable;
-                layout[pos_y][pos_x] = .{ .button = uzlm.vec2(x, y) };
+                layout[pos_y][pos_x] = .{ .button = .{
+                    .act = uzlm.vec2(x, y),
+                    .pressed = false,
+                } };
             },
             .portal => {
                 const x = std.fmt.parseInt(u32, props.next().?, 10) catch unreachable;
                 const y = std.fmt.parseInt(u32, props.next().?, 10) catch unreachable;
-                layout[pos_y][pos_x] = .{ .portal = uzlm.vec2(x, y) };
+                layout[pos_y][pos_x] = .{ .portal = .{
+                    .to = uzlm.vec2(x, y),
+                    .active = false,
+                } };
             },
         }
     }
 
     return .{
+        .allocator = allocator,
         .min_position = min_position,
         .max_position = max_position,
+        .level_size = max_position.sub(min_position),
         .clones = clones,
         .layout = layout,
     };
 }
 
-pub const level_1 = load_level("1.level");
+pub fn deinit(self: Level) void {
+    self.allocator.free(self.clones);
+}
 
-pub const Runner = struct {};
+pub inline fn tile_to_world(self: Level, tile: uzlm.Vec2) zlm.Vec3 {
+    const offset_x = @as(f32, @floatFromInt(self.min_position.x)) + @as(f32, @floatFromInt(self.level_size.x)) / 2;
+    const offset_y = @as(f32, @floatFromInt(self.min_position.y)) + @as(f32, @floatFromInt(self.level_size.y)) / 2;
+    return zlm.vec3(@as(f32, @floatFromInt(tile.x)) - offset_x, 0, offset_y - @as(f32, @floatFromInt(tile.y)));
+}
 
 pub fn render(self: Level, cube_renderer: *CubeRenderer, model_matrix: zlm.Mat4, view_proj_matrix: zlm.Mat4) void {
-    const level_size = self.max_position.sub(self.min_position);
-    const offset_x = level_size.scale(-1).add(self.min_position);
-    const offset_y = level_size.scale(-1).add(self.min_position);
-
-    for (0..level_height) |i| {
-        for (0..level_width) |j| {
+    var i: u32 = 0;
+    while (i < max_level_height) : (i += 1) {
+        var j: u32 = 0;
+        while (j < max_level_width) : (j += 1) {
+            const world_position = self.tile_to_world(uzlm.vec2(j, i));
             const tile_matrix = zlm.Mat4.createTranslationXYZ(
-                @as(f32, @floatFromInt(@as(i32, @intCast(j)) - offset.x)),
-                -0.5,
-                @as(f32, @floatFromInt(offset.x - @as(i32, @intCast(i)))),
+                world_position.x,
+                world_position.y - 0.5,
+                world_position.z,
             );
 
             if (self.layout[i][j]) |block| {
-                inline for (&self.clones) |*clone| {
+                for (self.clones) |*clone| {
                     if (clone.target_position.x == j and clone.target_position.y == i) {
                         cube_renderer.render(tile_matrix.mul(model_matrix), view_proj_matrix, zlm.vec4(1, 0.435, 0.349, 1));
                         break;
@@ -146,3 +148,27 @@ pub fn render(self: Level, cube_renderer: *CubeRenderer, model_matrix: zlm.Mat4,
         }
     }
 }
+
+pub const Clone = struct {
+    start_position: uzlm.Vec2,
+    current_position: uzlm.Vec2,
+    target_position: uzlm.Vec2,
+};
+
+pub const BlockKind = enum(u8) {
+    ground = 0,
+    button = 1,
+    portal = 2,
+};
+
+pub const Block = union(BlockKind) {
+    ground,
+    button: struct {
+        act: uzlm.Vec2,
+        pressed: bool,
+    },
+    portal: struct {
+        to: uzlm.Vec2,
+        active: bool,
+    },
+};

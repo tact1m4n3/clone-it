@@ -139,7 +139,7 @@ pub fn move(self: *Player, position: zlm.Vec3) bool {
 
     self.state = .{
         .move = .{
-            .controller = animation.Controller.init(0, 1.6, animation.functions.easeInOutElastic),
+            .controller = animation.Controller.init(0, 1.0, animation.functions.easeInOutQuint),
             .animation = .{
                 .initial_state = self.position,
                 .final_state = position,

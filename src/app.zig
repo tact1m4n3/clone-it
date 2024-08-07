@@ -54,8 +54,7 @@ pub fn run() !void {
     c.glfwWindowHint(c.GLFW_CONTEXT_VERSION_MAJOR, 4);
     c.glfwWindowHint(c.GLFW_CONTEXT_VERSION_MINOR, 1);
     c.glfwWindowHint(c.GLFW_OPENGL_PROFILE, c.GLFW_OPENGL_CORE_PROFILE);
-    c.glfwWindowHint(c.GLFW_CONTEXT_VERSION_MAJOR, 4);
-    const window = c.glfwCreateWindow(window_width, window_height, window_title, c.glfwGetPrimaryMonitor(), null) orelse {
+    const window = c.glfwCreateWindow(window_width, window_height, window_title, null, null) orelse {
         return error.WindowCreateError;
     };
     defer _ = c.glfwDestroyWindow(window);

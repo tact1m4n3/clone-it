@@ -56,7 +56,7 @@ pub const Button = struct {
             .cursor_pos => |pos| {
                 const ray: raycasting.Ray = .{
                     .orig = zlm.vec3(0, 0, -1),
-                    .dir = zlm.vec3(pos.x, pos.y, 1),
+                    .dir = zlm.vec3(@floatCast(pos.x), @floatCast(pos.y), 1),
                 };
                 var bbox: raycasting.Bbox = .{
                     .min = zlm.vec3(self.text.rect.position.x, self.text.rect.position.y, 0),

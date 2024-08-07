@@ -73,6 +73,10 @@ pub const functions = struct {
         return 1 - std.math.pow(f32, 1 - x, 3);
     }
 
+    pub fn easeInOutQuint(x: f32) f32 {
+        return if (x < 0.5) 16 * x * x * x * x * x else 1 + 16 * std.math.pow(f32, x - 1, 5);
+    }
+
     pub fn easeInBack(x: f32) f32 {
         const c1 = 1.70158;
         const c3 = c1 + 1;

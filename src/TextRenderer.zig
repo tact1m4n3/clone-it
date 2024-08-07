@@ -1,4 +1,5 @@
 const std = @import("std");
+
 const log = std.log.scoped(.text_renderer);
 const Allocator = std.mem.Allocator;
 const gl = @import("zgl");
