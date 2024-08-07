@@ -22,6 +22,7 @@ const State = union(enum) {
     },
     teleport: union(enum) {
         despawn: struct {
+            particle_timer: std.time.Timer,
             position_controller: animation.Controller,
             position_animation: Vec3Interpolation,
             scale_controller: animation.Controller,

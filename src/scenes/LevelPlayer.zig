@@ -7,8 +7,8 @@ const zlm = @import("zlm");
 const app = @import("../app.zig");
 const Event = app.Event;
 const Player = @import("../Player.zig");
-const Level = @import("../Level.zig");
 const CubeRenderer = @import("../CubeRenderer.zig");
+const World = @import("../World.zig");
 
 const LevelPlayerScene = @This();
 
@@ -18,6 +18,7 @@ view_matrix: zlm.Mat4,
 view_proj_matrix: zlm.Mat4,
 cube_renderer: CubeRenderer,
 player: Player,
+world: World,
 
 pub fn init(allocator: Allocator, random: Random) !LevelPlayerScene {
     const frame_buffer_size = app.getFramebufferSize();
@@ -28,8 +29,15 @@ pub fn init(allocator: Allocator, random: Random) !LevelPlayerScene {
     const view_matrix = zlm.Mat4.createLookAt(zlm.vec3(1, 8, 5), zlm.Vec3.zero, zlm.vec3(0, 1, 0));
     const view_proj_matrix = view_matrix.mul(proj_matrix);
 
-    const cube_renderer = try CubeRenderer.init(allocator);
+    var cube_renderer = try CubeRenderer.init(allocator);
+    errdefer cube_renderer.deinit();
+
     const player = Player.init(zlm.vec3(-4, 0, -3), zlm.vec4(0.8, 0.8, 0.8, 1));
+
+    const world = try World.init(allocator);
+    world.grid_renderer.uploadData();
+    world.blocks_renderer.uploadBlockAtlas();
+    world.blocks_renderer.uploadData();
 
     return .{
         .random = random,
@@ -38,11 +46,13 @@ pub fn init(allocator: Allocator, random: Random) !LevelPlayerScene {
         .view_proj_matrix = view_proj_matrix,
         .cube_renderer = cube_renderer,
         .player = player,
+        .world = world,
     };
 }
 
 pub fn deinit(self: *LevelPlayerScene) void {
     self.cube_renderer.deinit();
+    self.world.deinit();
 }
 
 pub fn on_event(self_opaque: *anyopaque, event: Event) void {
@@ -61,12 +71,17 @@ pub fn on_event(self_opaque: *anyopaque, event: Event) void {
         },
         else => {},
     }
+
+    self.world.on_event(event);
 }
 
 pub fn update(self_opaque: *anyopaque, dt: f32) void {
     const self: *LevelPlayerScene = @ptrCast(@alignCast(self_opaque));
 
     self.player.update(dt);
+    self.world.update();
+    self.world.grid_renderer.update();
+    self.world.blocks_renderer.update();
 }
 
 pub fn render(self_opaque: *anyopaque) void {
@@ -75,7 +90,9 @@ pub fn render(self_opaque: *anyopaque) void {
     gl.clearColor(0.541, 0.776, 0.816, 1);
     gl.clear(.{ .color = true, .depth = true });
 
-    Level.level_1.render(&self.cube_renderer, zlm.Mat4.identity, self.view_proj_matrix);
+    self.world.grid_renderer.render();
+    self.world.blocks_renderer.render();
+
     self.player.render(&self.cube_renderer, self.view_proj_matrix);
     self.cube_renderer.flush(self.view_proj_matrix);
 }

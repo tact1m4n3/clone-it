@@ -6,6 +6,8 @@ const gl = @import("zgl");
 const zlm = @import("zlm");
 const zaudio = @import("zaudio");
 
+const zlm_f64 = zlm.SpecializeOn(f64);
+
 const c = @import("c.zig");
 const Assets = @import("Assets.zig");
 const Scene = @import("Scene.zig");
@@ -53,7 +55,7 @@ pub fn run() !void {
     c.glfwWindowHint(c.GLFW_CONTEXT_VERSION_MINOR, 1);
     c.glfwWindowHint(c.GLFW_OPENGL_PROFILE, c.GLFW_OPENGL_CORE_PROFILE);
     c.glfwWindowHint(c.GLFW_CONTEXT_VERSION_MAJOR, 4);
-    const window = c.glfwCreateWindow(window_width, window_height, window_title, null, null) orelse {
+    const window = c.glfwCreateWindow(window_width, window_height, window_title, c.glfwGetPrimaryMonitor(), null) orelse {
         return error.WindowCreateError;
     };
     defer _ = c.glfwDestroyWindow(window);
@@ -63,6 +65,7 @@ pub fn run() !void {
     _ = c.glfwSetCursorPosCallback(window, cursorPosCallback);
     _ = c.glfwSetKeyCallback(window, keyCallback);
     _ = c.glfwSetMouseButtonCallback(window, mouseButtonCallback);
+    _ = c.glfwSetScrollCallback(window, mouseScrollCallback);
 
     c.glfwMakeContextCurrent(window);
     defer c.glfwMakeContextCurrent(null);
@@ -148,6 +151,21 @@ pub fn getFramebufferSize() [2]u32 {
     return .{ @intCast(width), @intCast(height) };
 }
 
+pub fn getMousePosition() zlm_f64.Vec2 {
+    var xpos: f64 = undefined;
+    var ypos: f64 = undefined;
+    c.glfwGetCursorPos(state.window, &xpos, &ypos);
+    const window_size = getWindowSize();
+    return zlm_f64.vec2(xpos, ypos)
+        .div(zlm_f64.vec2(@floatFromInt(window_size[0]), @floatFromInt(window_size[1])))
+        .sub(zlm_f64.vec2(0.5, 0.5))
+        .mul(zlm_f64.vec2(2, -2));
+}
+
+pub fn getMouseButtonPressed(button: MouseButton) bool {
+    return c.glfwGetMouseButton(state.window, @intFromEnum(button));
+}
+
 fn logGlfwError(code: c_int, description: [*c]const u8) callconv(.C) void {
     const log = std.log.scoped(.window);
     log.err("{d}: {s}", .{ code, description });
@@ -159,10 +177,10 @@ fn framebufferSizeCallback(_: ?*c.struct_GLFWwindow, width: c_int, height: c_int
 
 fn cursorPosCallback(_: ?*c.struct_GLFWwindow, xpos: f64, ypos: f64) callconv(.C) void {
     const window_size = getWindowSize();
-    const cursor_pos = zlm.vec2(@floatCast(xpos), @floatCast(ypos))
-        .div(zlm.vec2(@floatFromInt(window_size[0]), @floatFromInt(window_size[1])))
-        .sub(zlm.vec2(0.5, 0.5))
-        .mul(zlm.vec2(2, -2));
+    const cursor_pos = zlm_f64.vec2(xpos, ypos)
+        .div(zlm_f64.vec2(@floatFromInt(window_size[0]), @floatFromInt(window_size[1])))
+        .sub(zlm_f64.vec2(0.5, 0.5))
+        .mul(zlm_f64.vec2(2, -2));
     state.scene_runner.on_event(.{ .cursor_pos = cursor_pos });
 }
 
@@ -183,10 +201,14 @@ fn mouseButtonCallback(_: ?*c.struct_GLFWwindow, button: c_int, action: c_int, m
     } });
 }
 
+fn mouseScrollCallback(_: ?*c.struct_GLFWwindow, xoffset: f64, yoffset: f64) callconv(.C) void {
+    state.scene_runner.on_event(.{ .mouse_scroll = zlm_f64.vec2(xoffset, yoffset) });
+}
+
 // we should use some enums here
 pub const Event = union(enum) {
     resize: [2]u32,
-    cursor_pos: zlm.Vec2, // x = [-1; 1], y = [-1; 1] (bottom-up)
+    cursor_pos: zlm_f64.Vec2, // x = [-1; 1], y = [-1; 1] (bottom-up)
     key: struct {
         key: Key,
         scancode: c_int,
@@ -198,6 +220,7 @@ pub const Event = union(enum) {
         action: Action,
         mods: c_int,
     },
+    mouse_scroll: zlm_f64.Vec2,
 };
 
 pub const Key = enum(i32) {
