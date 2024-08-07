@@ -99,11 +99,11 @@ pub fn update(self: *Self, dt: f32) void {
     }
 }
 
-pub fn render(self: *Self, renderer: *CubeRenderer) void {
+pub fn render(self: *Self, renderer: *CubeRenderer, view_proj_matrix: zlm.Mat4) void {
     // TODO: maybe before rendering we should sort the particles in terms of their position for transparency to work
 
     for (self.particles) |*particle| {
         if (!particle.active) continue;
-        renderer.render(particle.transform.compute_matrix(), particle.color);
+        renderer.render(particle.transform.compute_matrix(), view_proj_matrix, particle.color);
     }
 }

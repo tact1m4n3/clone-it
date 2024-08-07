@@ -4,14 +4,10 @@ const Allocator = std.mem.Allocator;
 const gl = @import("zgl");
 const zlm = @import("zlm");
 
-const Font = @import("Font.zig");
+const app = @import("app.zig");
+const Text = @import("Text.zig");
 
 const TextRenderer = @This();
-
-pub const Anchor = enum {
-    top_left,
-    center,
-};
 
 const Vertex = extern struct {
     position: zlm.Vec4,
@@ -41,18 +37,22 @@ const quad_tex_coords = [_]zlm.Vec2{
 };
 
 allocator: Allocator,
-font: *Font,
-view_proj_matrix: zlm.Mat4,
-program: gl.Program,
-view_proj_matrix_uniform: u32,
 vertices: []Vertex,
 vertex_count: u16,
 index_count: u16,
+program: gl.Program,
+view_proj_matrix_uniform: u32,
 vertex_array: gl.VertexArray,
 vertex_buffer: gl.Buffer,
 index_buffer: gl.Buffer,
+atlas_texture: ?gl.Texture,
 
-pub fn init(allocator: Allocator, font: *Font, view_proj_matrix: zlm.Mat4) !TextRenderer {
+pub fn init(allocator: Allocator) !TextRenderer {
+    const vertices = try allocator.alloc(Vertex, max_vertices);
+    errdefer allocator.free(vertices);
+    const indices = try allocator.alloc(u16, max_indices);
+    defer allocator.free(indices);
+
     const program = create_program: {
         const vertex_shader_source = @embedFile(vertex_shader_path);
         const fragment_shader_source = @embedFile(fragment_shader_path);
@@ -105,16 +105,13 @@ pub fn init(allocator: Allocator, font: *Font, view_proj_matrix: zlm.Mat4) !Text
 
         break :create_program program;
     };
+    errdefer gl.deleteProgram(program);
 
     const view_proj_matrix_uniform = gl.getUniformLocation(program, "u_ViewProjMatrix") orelse return error.UniformNotFound;
 
     const vertex_array = gl.genVertexArray();
     const vertex_buffer = gl.genBuffer();
     const index_buffer = gl.genBuffer();
-
-    const vertices = try allocator.alloc(Vertex, max_vertices);
-    const indices = try allocator.alloc(u16, max_indices);
-    defer allocator.free(indices);
 
     {
         var i: u16 = 0;
@@ -179,16 +176,15 @@ pub fn init(allocator: Allocator, font: *Font, view_proj_matrix: zlm.Mat4) !Text
 
     return .{
         .allocator = allocator,
-        .view_proj_matrix = view_proj_matrix,
-        .font = font,
-        .program = program,
-        .view_proj_matrix_uniform = view_proj_matrix_uniform,
         .vertices = vertices,
         .vertex_count = 0,
         .index_count = 0,
+        .program = program,
+        .view_proj_matrix_uniform = view_proj_matrix_uniform,
         .vertex_array = vertex_array,
         .vertex_buffer = vertex_buffer,
         .index_buffer = index_buffer,
+        .atlas_texture = null,
     };
 }
 
@@ -200,37 +196,33 @@ pub fn deinit(self: *TextRenderer) void {
     gl.deleteProgram(self.program);
 }
 
-pub fn render(self: *TextRenderer, text: []const u8, model_matrix: zlm.Mat4, color: zlm.Vec4) void {
-    var text_width: f32 = 0;
-    var current_width: f32 = 0;
-    var text_height: f32 = self.font.line_height;
+pub fn render(self: *TextRenderer, text: Text, model_matrix: zlm.Mat4, view_proj_matrix: zlm.Mat4, color: zlm.Vec4) void {
+    if (text.str.len == 0)
+        return;
 
-    for (text) |ch| {
+    const font = &app.state.assets.font;
+
+    if (self.atlas_texture != font.atlas_texture)
+        self.flush(view_proj_matrix);
+
+    self.atlas_texture = font.atlas_texture;
+
+    var position = zlm.vec2(text.rect.position.x, text.rect.position.y + text.rect.size.y + font.line_height - font.baseline);
+
+    const view = std.unicode.Utf8View.initUnchecked(text.str);
+    var iter = view.iterator();
+    while (iter.nextCodepoint()) |ch| {
         if (ch == '\n') {
-            text_width = @max(text_width, current_width);
-            text_height += self.font.line_height;
-            continue;
-        }
-        const glyph_info = self.font.glyphs.get(ch).?;
-        current_width += glyph_info.advance;
-    } else {
-        text_width = @max(text_width, current_width);
-    }
-
-    var position: zlm.Vec2 = .{ .x = -text_width / 2, .y = text_height / 2 + self.font.line_height - self.font.baseline };
-
-    for (text) |ch| {
-        if (ch == '\n') {
-            position.x = -text_width / 2;
-            position.y -= self.font.line_height;
+            position.x = text.rect.position.x;
+            position.y -= font.line_height;
             continue;
         }
 
         if (self.vertex_count + 4 > max_vertices) {
-            self.flush();
+            self.flush(view_proj_matrix);
         }
 
-        const glyph_info = self.font.glyphs.get(ch).?;
+        const glyph_info = font.glyphs.get(ch).?;
 
         const quad_position = position.add(.{ .x = glyph_info.offset.x, .y = -glyph_info.offset.y });
         const quad_size = glyph_info.size;
@@ -251,8 +243,8 @@ pub fn render(self: *TextRenderer, text: []const u8, model_matrix: zlm.Mat4, col
     }
 }
 
-pub fn flush(self: *TextRenderer) void {
-    if (self.index_count == 0) {
+pub fn flush(self: *TextRenderer, view_proj_matrix: zlm.Mat4) void {
+    if (self.index_count == 0 or self.atlas_texture == null) {
         return;
     }
 
@@ -266,8 +258,8 @@ pub fn flush(self: *TextRenderer) void {
     gl.useProgram(self.program);
     defer gl.useProgram(.invalid);
 
-    gl.uniformMatrix4fv(self.view_proj_matrix_uniform, false, &[_][4][4]f32{self.view_proj_matrix.fields});
-    gl.bindTexture(self.font.atlas_texture, .@"2d");
+    gl.uniformMatrix4fv(self.view_proj_matrix_uniform, false, &[_][4][4]f32{view_proj_matrix.fields});
+    gl.bindTexture(self.atlas_texture.?, .@"2d");
 
     gl.bindVertexArray(self.vertex_array);
     defer gl.bindVertexArray(.invalid);
@@ -276,4 +268,5 @@ pub fn flush(self: *TextRenderer) void {
 
     self.vertex_count = 0;
     self.index_count = 0;
+    self.atlas_texture = null;
 }

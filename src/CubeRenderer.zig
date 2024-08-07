@@ -29,35 +29,35 @@ const max_cubes = 100;
 // TODO: maybe come up with a compile time solution
 // zig fmt: off
 const cube_vertices = [_]Vertex{
-    .{ .position = zlm.vec3(-1, -1,  1), .normal = zlm.vec3( 0,  0,  1) },
-    .{ .position = zlm.vec3( 1, -1,  1), .normal = zlm.vec3( 0,  0,  1) },
-    .{ .position = zlm.vec3( 1,  1,  1), .normal = zlm.vec3( 0,  0,  1) },
-    .{ .position = zlm.vec3(-1,  1,  1), .normal = zlm.vec3( 0,  0,  1) },
+    .{ .position = zlm.vec3(-0.5, -0.5,  0.5), .normal = zlm.vec3( 0,  0,  1) },
+    .{ .position = zlm.vec3( 0.5, -0.5,  0.5), .normal = zlm.vec3( 0,  0,  1) },
+    .{ .position = zlm.vec3( 0.5,  0.5,  0.5), .normal = zlm.vec3( 0,  0,  1) },
+    .{ .position = zlm.vec3(-0.5,  0.5,  0.5), .normal = zlm.vec3( 0,  0,  1) },
 
-    .{ .position = zlm.vec3(-1, -1, -1), .normal = zlm.vec3( 0,  0, -1) },
-    .{ .position = zlm.vec3( 1, -1, -1), .normal = zlm.vec3( 0,  0, -1) },
-    .{ .position = zlm.vec3( 1,  1, -1), .normal = zlm.vec3( 0,  0, -1) },
-    .{ .position = zlm.vec3(-1,  1, -1), .normal = zlm.vec3( 0,  0, -1) },
+    .{ .position = zlm.vec3(-0.5, -0.5, -0.5), .normal = zlm.vec3( 0,  0, -1) },
+    .{ .position = zlm.vec3( 0.5, -0.5, -0.5), .normal = zlm.vec3( 0,  0, -1) },
+    .{ .position = zlm.vec3( 0.5,  0.5, -0.5), .normal = zlm.vec3( 0,  0, -1) },
+    .{ .position = zlm.vec3(-0.5,  0.5, -0.5), .normal = zlm.vec3( 0,  0, -1) },
 
-    .{ .position = zlm.vec3(-1, -1, -1), .normal = zlm.vec3(-1,  0,  0) },
-    .{ .position = zlm.vec3(-1, -1,  1), .normal = zlm.vec3(-1,  0,  0) },
-    .{ .position = zlm.vec3(-1,  1,  1), .normal = zlm.vec3(-1,  0,  0) },
-    .{ .position = zlm.vec3(-1,  1, -1), .normal = zlm.vec3(-1,  0,  0) },
+    .{ .position = zlm.vec3(-0.5, -0.5, -0.5), .normal = zlm.vec3(-1,  0,  0) },
+    .{ .position = zlm.vec3(-0.5, -0.5,  0.5), .normal = zlm.vec3(-1,  0,  0) },
+    .{ .position = zlm.vec3(-0.5,  0.5,  0.5), .normal = zlm.vec3(-1,  0,  0) },
+    .{ .position = zlm.vec3(-0.5,  0.5, -0.5), .normal = zlm.vec3(-1,  0,  0) },
 
-    .{ .position = zlm.vec3( 1, -1, -1), .normal = zlm.vec3( 1,  0,  0) },
-    .{ .position = zlm.vec3( 1, -1,  1), .normal = zlm.vec3( 1,  0,  0) },
-    .{ .position = zlm.vec3( 1,  1,  1), .normal = zlm.vec3( 1,  0,  0) },
-    .{ .position = zlm.vec3( 1,  1, -1), .normal = zlm.vec3( 1,  0,  0) },
+    .{ .position = zlm.vec3( 0.5, -0.5, -0.5), .normal = zlm.vec3( 1,  0,  0) },
+    .{ .position = zlm.vec3( 0.5, -0.5,  0.5), .normal = zlm.vec3( 1,  0,  0) },
+    .{ .position = zlm.vec3( 0.5,  0.5,  0.5), .normal = zlm.vec3( 1,  0,  0) },
+    .{ .position = zlm.vec3( 0.5,  0.5, -0.5), .normal = zlm.vec3( 1,  0,  0) },
 
-    .{ .position = zlm.vec3(-1,  1, -1), .normal = zlm.vec3( 0,  1,  0) },
-    .{ .position = zlm.vec3(-1,  1,  1), .normal = zlm.vec3( 0,  1,  0) },
-    .{ .position = zlm.vec3( 1,  1,  1), .normal = zlm.vec3( 0,  1,  0) },
-    .{ .position = zlm.vec3( 1,  1, -1), .normal = zlm.vec3( 0,  1,  0) },
+    .{ .position = zlm.vec3(-0.5,  0.5, -0.5), .normal = zlm.vec3( 0,  1,  0) },
+    .{ .position = zlm.vec3(-0.5,  0.5,  0.5), .normal = zlm.vec3( 0,  1,  0) },
+    .{ .position = zlm.vec3( 0.5,  0.5,  0.5), .normal = zlm.vec3( 0,  1,  0) },
+    .{ .position = zlm.vec3( 0.5,  0.5, -0.5), .normal = zlm.vec3( 0,  1,  0) },
 
-    .{ .position = zlm.vec3(-1, -1, -1), .normal = zlm.vec3( 0, -1,  0) },
-    .{ .position = zlm.vec3(-1, -1,  1), .normal = zlm.vec3( 0, -1,  0) },
-    .{ .position = zlm.vec3( 1, -1,  1), .normal = zlm.vec3( 0, -1,  0) },
-    .{ .position = zlm.vec3( 1, -1, -1), .normal = zlm.vec3( 0, -1,  0) },
+    .{ .position = zlm.vec3(-0.5, -0.5, -0.5), .normal = zlm.vec3( 0, -1,  0) },
+    .{ .position = zlm.vec3(-0.5, -0.5,  0.5), .normal = zlm.vec3( 0, -1,  0) },
+    .{ .position = zlm.vec3( 0.5, -0.5,  0.5), .normal = zlm.vec3( 0, -1,  0) },
+    .{ .position = zlm.vec3( 0.5, -0.5, -0.5), .normal = zlm.vec3( 0, -1,  0) },
 };
 // zig fmt: on
 
@@ -82,16 +82,18 @@ const cube_indices = create_indices: {
 };
 
 allocator: Allocator,
-view_proj_matrix: zlm.Mat4,
-program: gl.Program,
 uniform_data: *UniformData,
+program: gl.Program,
 instance_count: usize,
 vertex_array: gl.VertexArray,
 vertex_buffer: gl.Buffer,
 index_buffer: gl.Buffer,
 uniform_buffer: gl.Buffer,
 
-pub fn init(allocator: Allocator, view_proj_matrix: zlm.Mat4) !CubeRenderer {
+pub fn init(allocator: Allocator) !CubeRenderer {
+    const uniform_data = try allocator.create(UniformData);
+    errdefer allocator.destroy(uniform_data);
+
     const program = create_program: {
         const vertex_shader_source = @embedFile(vertex_shader_path);
         const fragment_shader_source = @embedFile(fragment_shader_path);
@@ -144,11 +146,10 @@ pub fn init(allocator: Allocator, view_proj_matrix: zlm.Mat4) !CubeRenderer {
 
         break :create_program program;
     };
+    errdefer gl.deleteProgram(program);
 
     const uniform_data_index: u32 = @intCast(gl.binding.getUniformBlockIndex(@intFromEnum(program), "UniformData"));
     gl.uniformBlockBinding(program, uniform_data_index, 0);
-
-    const uniform_data = try allocator.create(UniformData);
 
     const vertex_array = gl.genVertexArray();
     const vertex_buffer = gl.genBuffer();
@@ -199,9 +200,8 @@ pub fn init(allocator: Allocator, view_proj_matrix: zlm.Mat4) !CubeRenderer {
 
     return .{
         .allocator = allocator,
-        .view_proj_matrix = view_proj_matrix,
-        .program = program,
         .uniform_data = uniform_data,
+        .program = program,
         .instance_count = 0,
         .vertex_array = vertex_array,
         .vertex_buffer = vertex_buffer,
@@ -219,9 +219,9 @@ pub fn deinit(self: *CubeRenderer) void {
     gl.deleteProgram(self.program);
 }
 
-pub fn render(self: *CubeRenderer, model_matrix: zlm.Mat4, color: zlm.Vec4) void {
+pub fn render(self: *CubeRenderer, model_matrix: zlm.Mat4, view_proj_matrix: zlm.Mat4, color: zlm.Vec4) void {
     if (self.instance_count >= max_cubes) {
-        self.flush();
+        self.flush(view_proj_matrix);
     }
 
     self.uniform_data.instances[self.instance_count].model_matrix = model_matrix;
@@ -229,13 +229,13 @@ pub fn render(self: *CubeRenderer, model_matrix: zlm.Mat4, color: zlm.Vec4) void
     self.instance_count += 1;
 }
 
-pub fn flush(self: *CubeRenderer) void {
+pub fn flush(self: *CubeRenderer, view_proj_matrix: zlm.Mat4) void {
     if (self.instance_count == 0) {
         return;
     }
 
     {
-        self.uniform_data.view_proj_matrix = self.view_proj_matrix;
+        self.uniform_data.view_proj_matrix = view_proj_matrix;
 
         gl.bindBuffer(self.uniform_buffer, .uniform_buffer);
         defer gl.bindBuffer(.invalid, .uniform_buffer);

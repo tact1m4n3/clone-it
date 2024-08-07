@@ -3,16 +3,15 @@ const zlm = @import("zlm");
 
 const Transform = @import("Transform.zig");
 
-pub fn Interpolate(T: type) type {
+pub fn Interpolate(T: type, lerp_func: *const fn (T, T, f32) T) type {
     return struct {
         const Self = @This();
 
         initial_state: T,
         final_state: T,
-        lerp_func: *const fn (T, T, f32) T,
 
         pub fn lerp(self: Self, t: f32) T {
-            return self.lerp_func(self.initial_state, self.final_state, t);
+            return lerp_func(self.initial_state, self.final_state, t);
         }
     };
 }
@@ -60,6 +59,10 @@ pub const functions = struct {
 
     pub fn easeOutQuad(x: f32) f32 {
         return 1 - (1 - x) * (1 - x);
+    }
+
+    pub fn easeInOutQuad(x: f32) f32 {
+        return if (x < 0.5) 2 * x * x else 1 - std.math.pow(f32, -2 * x + 2, 2) / 2;
     }
 
     pub fn easeInCubic(x: f32) f32 {

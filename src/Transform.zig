@@ -2,19 +2,9 @@ const zlm = @import("zlm");
 
 const Transform = @This();
 
-// we can also use custom math here, dropping zlm
-
 position: zlm.Vec3 = zlm.Vec3.zero,
 rotation: zlm.Vec3 = zlm.Vec3.zero, // we can use quaternions once we have them
 scale: zlm.Vec3 = zlm.Vec3.one,
-
-pub fn join(a: Transform, b: Transform) Transform {
-    return .{
-        .position = a.position.add(b.position),
-        .rotation = a.rotation.add(b.rotation),
-        .scale = a.scale.mul(b.scale),
-    };
-}
 
 pub fn lerp(a: Transform, b: Transform, t: f32) Transform {
     return .{

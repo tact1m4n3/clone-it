@@ -33,6 +33,10 @@ pub fn build(b: *std.Build) void {
     const zlm_dep = b.dependency("zlm", .{});
     exe.root_module.addImport("zlm", zlm_dep.module("zlm"));
 
+    const zaudio = b.dependency("zaudio", .{});
+    exe.root_module.addImport("zaudio", zaudio.module("root"));
+    exe.linkLibrary(zaudio.artifact("miniaudio"));
+
     const run_cmd = b.addRunArtifact(exe);
     run_cmd.step.dependOn(b.getInstallStep());
     if (b.args) |args| {
