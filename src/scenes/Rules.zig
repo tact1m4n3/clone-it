@@ -14,19 +14,19 @@ const MenuScene = @import("Menu.zig");
 const RulesScene = @This();
 
 const rules_content =
-    \\Your goal is to place each player (clone) on it's coresponding tile
-    \\with the same color. You can move using arrows, "wasd" or by swiping
-    \\on the screen. "t" issues a teleport command, which means all players
-    \\on a teleport block (of blue color) shall be teleported to another
-    \\analog blue colored block. For a portal to be traversable it has to be
-    \\activated (emits particles). Inactive portals are enabled by pressing
-    \\a button (moving to a button block of pink color). The portal that a
-    \\given button activates is not specified tho it's deducible. A button
-    \\that is not pressed emits particles simmilarly to an activated portal.
-    \\Some buttons may not stay pressed without a player (clone) standing
-    \\on it! Beware, that all actions apply to all players (clones) at once.
-    \\In the level picker screen, use arrows or "ad" to move between levels.
-    \\Press escape to go to the previous screen. Good luck and have fun! :))
+    \\The goal is to place each clone on its corresponding tile with
+    \\the same color. You can move using arrows, "wasd" or by swiping
+    \\on the screen. "t" issues a teleport command, which means all
+    \\players on a teleport block (of blue color) will teleport to a
+    \\corresponding blue-colored block. A traversable portal emits
+    \\particles. Non-traversable portals are enabled by pressing a
+    \\button (moving to a button block of pink color). What button
+    \\activates a given portal and the pair of blocks that make up
+    \\a portal are not specified, though they are deducible. An
+    \\unpressed button emits particles similarly to an activated
+    \\portal. Some buttons may not stay pressed without a clone
+    \\standing on them! Beware that all actions apply to all clones
+    \\at once.
 ;
 
 random: Random,

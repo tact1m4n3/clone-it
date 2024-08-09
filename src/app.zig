@@ -136,7 +136,7 @@ pub fn run() !void {
         c.glfwPollEvents();
 
         const dt = @as(f32, @floatFromInt(timer.lap())) / @as(f32, @floatFromInt(std.time.ns_per_s));
-        std.debug.print("{d} fps\r", .{1 / dt});
+        // std.debug.print("{d} fps\r", .{1 / dt});
 
         // update
         state.scene_runner.update(dt);
