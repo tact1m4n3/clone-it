@@ -5,7 +5,7 @@ pub fn build(b: *std.Build) void {
     const optimize = b.standardOptimizeOption(.{});
 
     const exe = b.addExecutable(.{
-        .name = "galaxy-one-hackathon", // TODO: change this after we come up with a name
+        .name = "clone-it",
         .root_source_file = b.path("src/main.zig"),
         .target = target,
         .optimize = optimize,

@@ -14,6 +14,7 @@ const Sound = @import("Sound.zig");
 const Scene = @import("Scene.zig");
 const SceneRunner = @import("SceneRunner.zig");
 const MenuScene = @import("scenes/Menu.zig");
+const RulesScene = @import("scenes/Rules.zig");
 const LevelPickerScene = @import("scenes/LevelPicker.zig");
 const LevelPlayerScene = @import("scenes/LevelPlayer.zig");
 
@@ -26,12 +27,13 @@ pub const State = struct {
         click: Sound,
     } = undefined,
     menu_scene: MenuScene = undefined,
+    rules_scene: RulesScene = undefined,
     level_picker_scene: LevelPickerScene = undefined,
     level_player_scene: LevelPlayerScene = undefined,
     scene_runner: SceneRunner = undefined,
 };
 
-const window_title = "To be changed";
+const window_title = "Clone it!";
 const window_width = 1280;
 const window_height = 720;
 
@@ -116,6 +118,9 @@ pub fn run() !void {
     state.menu_scene = try MenuScene.init(allocator, random);
     defer state.menu_scene.deinit();
 
+    state.rules_scene = try RulesScene.init(allocator, random);
+    defer state.rules_scene.deinit();
+
     state.level_picker_scene = try LevelPickerScene.init(allocator, random);
     defer state.level_picker_scene.deinit();
 
@@ -131,6 +136,7 @@ pub fn run() !void {
         c.glfwPollEvents();
 
         const dt = @as(f32, @floatFromInt(timer.lap())) / @as(f32, @floatFromInt(std.time.ns_per_s));
+        std.debug.print("{d} fps\r", .{1 / dt});
 
         // update
         state.scene_runner.update(dt);
@@ -198,7 +204,7 @@ fn keyCallback(_: ?*c.struct_GLFWwindow, key: c_int, scancode: c_int, action: c_
         .key = @enumFromInt(key),
         .scancode = scancode,
         .action = @enumFromInt(action),
-        .mods = mods,
+        .mods = @bitCast(mods),
     } });
 }
 
@@ -222,7 +228,7 @@ pub const Event = union(enum) {
         key: Key,
         scancode: c_int,
         action: Action,
-        mods: c_int,
+        mods: KeyMods,
     },
     mouse_button: struct {
         button: MouseButton,
@@ -353,6 +359,17 @@ pub const Key = enum(i32) {
     right_alt = 346,
     right_super = 347,
     menu = 348,
+};
+
+pub const KeyMods = packed struct(i32) {
+    shift: bool,
+    control: bool,
+    alt: bool,
+    super: bool,
+    caps_lock: bool,
+    num_lock: bool,
+
+    _padding: u26 = 0,
 };
 
 pub const MouseButton = enum(i32) {

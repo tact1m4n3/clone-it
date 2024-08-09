@@ -11,6 +11,7 @@ pub const Rect = struct {
 pub const Anchor = enum {
     center,
     top_left,
+    left_center,
 };
 
 const Text = @This();
@@ -47,6 +48,10 @@ pub fn init(str: []const u8, anchor: Anchor) Text {
         },
         .top_left => .{
             .position = zlm.vec2(0, -height),
+            .size = zlm.vec2(width, height),
+        },
+        .left_center => .{
+            .position = zlm.vec2(0, -height / 2),
             .size = zlm.vec2(width, height),
         },
     };

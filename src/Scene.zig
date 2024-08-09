@@ -6,6 +6,7 @@ ptr: *anyopaque,
 impl: *const Interface,
 
 pub const Interface = struct {
+    on_load: *const fn (*anyopaque) void,
     on_event: *const fn (*anyopaque, event: Event) void,
     update: *const fn (*anyopaque, f32) void,
     render: *const fn (*anyopaque) void,
@@ -16,11 +17,16 @@ pub fn from(comptime T: type, scene: *anyopaque) Scene {
     return Scene{
         .ptr = self,
         .impl = &.{
+            .on_load = T.on_load,
             .on_event = T.on_event,
             .update = T.update,
             .render = T.render,
         },
     };
+}
+
+pub fn on_load(self: Scene) void {
+    self.impl.on_load(self.ptr);
 }
 
 pub fn on_event(self: Scene, event: Event) void {

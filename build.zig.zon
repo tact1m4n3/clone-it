@@ -1,7 +1,7 @@
 .{
-    .name = "galaxy-one-hackathon", // TODO: change this after we come up with a name
+    .name = "clone-it",
 
-    .version = "0.0.0",
+    .version = "0.0.1",
 
     .dependencies = .{
         .glfw = .{

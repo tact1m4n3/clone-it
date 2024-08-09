@@ -6,7 +6,7 @@ const zlm = @import("zlm");
 const CubeRenderer = @import("CubeRenderer.zig");
 const Transform = @import("Transform.zig");
 
-const Self = @This();
+const ParticleSystem = @This();
 
 const Particle = struct {
     active: bool,
@@ -44,7 +44,7 @@ allocator: Allocator,
 particles: []Particle,
 next_index: usize,
 
-pub fn init(allocator: Allocator, pool_size: usize) !Self {
+pub fn init(allocator: Allocator, pool_size: usize) !ParticleSystem {
     const particles = try allocator.alloc(Particle, pool_size);
     @memset(particles, .{ .active = false });
     return .{
@@ -54,11 +54,11 @@ pub fn init(allocator: Allocator, pool_size: usize) !Self {
     };
 }
 
-pub fn deinit(self: *Self) void {
+pub fn deinit(self: ParticleSystem) void {
     self.allocator.free(self.particles);
 }
 
-pub fn emit(self: *Self, settings: EmitSettings) void {
+pub fn emit(self: *ParticleSystem, settings: EmitSettings) void {
     self.particles[self.next_index] = .{
         .active = true,
 
@@ -85,7 +85,7 @@ pub fn emit(self: *Self, settings: EmitSettings) void {
     }
 }
 
-pub fn update(self: *Self, dt: f32) void {
+pub fn update(self: *ParticleSystem, dt: f32) void {
     for (self.particles) |*particle| {
         if (!particle.active) continue;
         particle.velocity = particle.velocity.add(particle.velocity_variation.scale(dt));
@@ -99,7 +99,7 @@ pub fn update(self: *Self, dt: f32) void {
     }
 }
 
-pub fn render(self: *Self, renderer: *CubeRenderer, view_proj_matrix: zlm.Mat4) void {
+pub fn render(self: ParticleSystem, renderer: *CubeRenderer, view_proj_matrix: zlm.Mat4) void {
     // TODO: maybe before rendering we should sort the particles in terms of their position for transparency to work
 
     for (self.particles) |*particle| {
@@ -107,3 +107,21 @@ pub fn render(self: *Self, renderer: *CubeRenderer, view_proj_matrix: zlm.Mat4) 
         renderer.render(particle.transform.compute_matrix(), view_proj_matrix, particle.color);
     }
 }
+
+///
+/// Utility struct for keeping track of how many particles to spawn
+///
+pub const Timer = struct {
+    interval: f32,
+    time: f32 = 0,
+
+    pub fn update(self: *Timer, dt: f32) u32 {
+        self.time += dt;
+        return if (self.time >= self.interval) blk: {
+            const real = self.time / self.interval;
+            const count = @floor(real);
+            self.time = self.time - count * self.interval;
+            break :blk @intFromFloat(count);
+        } else 0;
+    }
+};

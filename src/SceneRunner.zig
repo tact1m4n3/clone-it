@@ -241,7 +241,38 @@ pub fn deinit(self: *SceneRunner) void {
 }
 
 pub fn on_event(self: *SceneRunner, event: Event) void {
-    // maybe we should handle events only after fade in
+    switch (event) {
+        .resize => |size| {
+            {
+                gl.bindTexture(self.texture, .@"2d_multisample");
+                defer gl.bindTexture(.invalid, .@"2d_multisample");
+
+                gl.binding.texImage2DMultisample(
+                    gl.binding.TEXTURE_2D_MULTISAMPLE,
+                    4,
+                    gl.binding.RGB,
+                    @intCast(size[0]),
+                    @intCast(size[1]),
+                    gl.binding.TRUE,
+                );
+            }
+
+            {
+                gl.bindRenderbuffer(self.render_buffer, .buffer);
+                defer gl.bindRenderbuffer(.invalid, .buffer);
+
+                gl.binding.renderbufferStorageMultisample(
+                    gl.binding.RENDERBUFFER,
+                    4,
+                    gl.binding.DEPTH24_STENCIL8,
+                    @intCast(size[0]),
+                    @intCast(size[1]),
+                );
+            }
+        },
+        else => {},
+    }
+
     self.scene.on_event(event);
 }
 
@@ -314,6 +345,10 @@ pub fn render(self: *SceneRunner) void {
 }
 
 pub fn change_scene(self: *SceneRunner, scene: Scene) void {
+    if (self.state == .outro) return;
+
+    scene.on_load();
+
     self.next_scene = scene;
     self.state = .{
         .outro = .{
